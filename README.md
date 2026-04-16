@@ -52,10 +52,11 @@
 
 ## 服务 API（Hertz）
 
-1. `GET /healthz`
-2. `GET /api/v1/status`：轮询状态、累计抓取、累计去重、库内总行数
-3. `POST /api/v1/sync/once`：手动触发（`mode=fast|backfill`）
-4. `GET /api/v1/events`：查询最近明细（支持 `limit/offset/slug/type/side`）
+1. `GET /`：内置 HTML 控制台（状态看板 + 手动同步 + 事件查询）
+2. `GET /healthz`
+3. `GET /api/v1/status`：轮询状态、累计抓取、累计去重、库内总行数
+4. `POST /api/v1/sync/once`：手动触发（`mode=fast|backfill`）
+5. `GET /api/v1/events`：查询最近明细（支持 `limit/offset/slug/type/side`）
 
 ## 环境变量
 
@@ -66,7 +67,7 @@
 
 常用可选：
 
-1. `PM_ACTIVITY_LISTEN_ADDR`，默认 `:18201`
+1. `PM_ACTIVITY_LISTEN_ADDR`，默认 `:18202`
 2. `PM_ACTIVITY_PAGE_LIMIT`，默认 `1000`（会被限制到 <=1000）
 3. `PM_ACTIVITY_FAST_INTERVAL_SEC`，默认 `30`
 4. `PM_ACTIVITY_BACKFILL_INTERVAL_SEC`，默认 `300`

@@ -13,6 +13,10 @@ import (
 func NewHTTPServer(cfg *Config, poller *Poller, store *MySQLStore) *server.Hertz {
 	h := server.Default(server.WithHostPorts(cfg.ListenAddr))
 
+	h.GET("/", func(ctx context.Context, c *app.RequestContext) {
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(dashboardHTML))
+	})
+
 	h.GET("/healthz", func(ctx context.Context, c *app.RequestContext) {
 		writeOK(c, map[string]interface{}{
 			"ok": true,
