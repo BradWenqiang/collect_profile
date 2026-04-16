@@ -1,0 +1,12 @@
+.DS_Store
+.idea/
+.vscode/
+
+*.log
+*.sqlite
+*.sqlite3
+tmp/
+dist/
+bin/
+
+.env
