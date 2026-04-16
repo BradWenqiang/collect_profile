@@ -56,6 +56,23 @@ type EventQuery struct {
 	Side         string
 }
 
+type SlugSummaryQuery struct {
+	Limit   int
+	Offset  int
+	Keyword string
+}
+
+type SlugSummary struct {
+	Slug             string `json:"slug"`
+	EventCount       int64  `json:"event_count"`
+	FirstTimestampMs int64  `json:"first_timestamp_ms"`
+	LastTimestampMs  int64  `json:"last_timestamp_ms"`
+	BuyCount         int64  `json:"buy_count"`
+	SellCount        int64  `json:"sell_count"`
+	UpCount          int64  `json:"up_count"`
+	DownCount        int64  `json:"down_count"`
+}
+
 func NewMySQLStore(dsn string, maxIdle, maxOpen int, maxLife time.Duration) (*MySQLStore, error) {
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -172,25 +189,29 @@ func (s *MySQLStore) Count(ctx context.Context) (int64, error) {
 	return total, nil
 }
 
+func (s *MySQLStore) CountEvents(ctx context.Context, q EventQuery) (int64, error) {
+	sqlText, args := buildEventQueryBase("SELECT COUNT(1)", q)
+	var total int64
+	err := s.db.QueryRowContext(ctx, sqlText, args...).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("count events failed: %w", err)
+	}
+	return total, nil
+}
+
 func (s *MySQLStore) QueryEvents(ctx context.Context, q EventQuery) ([]ActivityEvent, error) {
-	base := "SELECT event_id,user_wallet,proxy_wallet,timestamp_ms,event_time,condition_id,activity_type,size,usdc_size,transaction_hash,price,asset,side,outcome_index,title,slug,event_slug,outcome,raw_json,source_offset,source_index,pulled_at FROM pm_activity_events WHERE 1=1"
-	args := make([]interface{}, 0, 8)
-	if q.Slug != "" {
-		base += " AND slug = ?"
-		args = append(args, q.Slug)
+	if q.Limit <= 0 {
+		q.Limit = 100
 	}
-	if q.ActivityType != "" {
-		base += " AND activity_type = ?"
-		args = append(args, strings.ToUpper(strings.TrimSpace(q.ActivityType)))
+	if q.Offset < 0 {
+		q.Offset = 0
 	}
-	if q.Side != "" {
-		base += " AND side = ?"
-		args = append(args, strings.ToLower(strings.TrimSpace(q.Side)))
-	}
-	base += " ORDER BY timestamp_ms DESC, id DESC LIMIT ? OFFSET ?"
+
+	sqlText, args := buildEventQueryBase("SELECT event_id,user_wallet,proxy_wallet,timestamp_ms,event_time,condition_id,activity_type,size,usdc_size,transaction_hash,price,asset,side,outcome_index,title,slug,event_slug,outcome,raw_json,source_offset,source_index,pulled_at", q)
+	sqlText += " ORDER BY timestamp_ms DESC, id DESC LIMIT ? OFFSET ?"
 	args = append(args, q.Limit, q.Offset)
 
-	rows, err := s.db.QueryContext(ctx, base, args...)
+	rows, err := s.db.QueryContext(ctx, sqlText, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query events failed: %w", err)
 	}
@@ -252,6 +273,102 @@ func (s *MySQLStore) QueryEvents(ctx context.Context, q EventQuery) ([]ActivityE
 		return nil, fmt.Errorf("iterate rows failed: %w", err)
 	}
 	return out, nil
+}
+
+func (s *MySQLStore) QuerySlugSummaries(ctx context.Context, q SlugSummaryQuery) ([]SlugSummary, int64, error) {
+	if q.Limit <= 0 {
+		q.Limit = 12
+	}
+	if q.Offset < 0 {
+		q.Offset = 0
+	}
+
+	whereSQL, args := buildSlugWhere(q.Keyword)
+	countSQL := "SELECT COUNT(1) FROM (SELECT slug FROM pm_activity_events" + whereSQL + " GROUP BY slug) t"
+	var total int64
+	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count slugs failed: %w", err)
+	}
+	if total == 0 {
+		return []SlugSummary{}, 0, nil
+	}
+
+	listSQL := "SELECT slug, " +
+		"COUNT(1) AS event_count, " +
+		"COALESCE(MIN(timestamp_ms), 0) AS first_ts, " +
+		"COALESCE(MAX(timestamp_ms), 0) AS last_ts, " +
+		"SUM(CASE WHEN side = 'buy' THEN 1 ELSE 0 END) AS buy_count, " +
+		"SUM(CASE WHEN side = 'sell' THEN 1 ELSE 0 END) AS sell_count, " +
+		"SUM(CASE WHEN (LOWER(outcome) LIKE '%up%' OR LOWER(outcome) = 'yes' OR LOWER(outcome) LIKE '%long%' OR LOWER(outcome) LIKE '%higher%') THEN 1 ELSE 0 END) AS up_count, " +
+		"SUM(CASE WHEN (LOWER(outcome) LIKE '%down%' OR LOWER(outcome) = 'no' OR LOWER(outcome) LIKE '%short%' OR LOWER(outcome) LIKE '%lower%') THEN 1 ELSE 0 END) AS down_count " +
+		"FROM pm_activity_events" + whereSQL + " GROUP BY slug ORDER BY last_ts DESC LIMIT ? OFFSET ?"
+
+	listArgs := make([]interface{}, 0, len(args)+2)
+	listArgs = append(listArgs, args...)
+	listArgs = append(listArgs, q.Limit, q.Offset)
+
+	rows, err := s.db.QueryContext(ctx, listSQL, listArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query slug summaries failed: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]SlugSummary, 0, q.Limit)
+	for rows.Next() {
+		var row SlugSummary
+		if err = rows.Scan(
+			&row.Slug,
+			&row.EventCount,
+			&row.FirstTimestampMs,
+			&row.LastTimestampMs,
+			&row.BuyCount,
+			&row.SellCount,
+			&row.UpCount,
+			&row.DownCount,
+		); err != nil {
+			return nil, 0, fmt.Errorf("scan slug summary failed: %w", err)
+		}
+		items = append(items, row)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate slug summaries failed: %w", err)
+	}
+	return items, total, nil
+}
+
+func buildEventQueryBase(selectClause string, q EventQuery) (string, []interface{}) {
+	builder := strings.Builder{}
+	builder.WriteString(selectClause)
+	builder.WriteString(" FROM pm_activity_events WHERE 1=1")
+
+	args := make([]interface{}, 0, 4)
+	if q.Slug != "" {
+		builder.WriteString(" AND slug = ?")
+		args = append(args, strings.TrimSpace(q.Slug))
+	}
+	if q.ActivityType != "" {
+		builder.WriteString(" AND activity_type = ?")
+		args = append(args, strings.ToUpper(strings.TrimSpace(q.ActivityType)))
+	}
+	if q.Side != "" {
+		builder.WriteString(" AND side = ?")
+		args = append(args, strings.ToLower(strings.TrimSpace(q.Side)))
+	}
+	return builder.String(), args
+}
+
+func buildSlugWhere(keyword string) (string, []interface{}) {
+	builder := strings.Builder{}
+	builder.WriteString(" WHERE slug <> ''")
+	args := make([]interface{}, 0, 2)
+
+	keyword = strings.TrimSpace(keyword)
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		builder.WriteString(" AND (slug LIKE ? OR title LIKE ?)")
+		args = append(args, like, like)
+	}
+	return builder.String(), args
 }
 
 func nullableDecimal(raw string) interface{} {

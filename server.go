@@ -75,26 +75,84 @@ func NewHTTPServer(cfg *Config, poller *Poller, store *MySQLStore) *server.Hertz
 
 	h.GET("/api/v1/events", func(ctx context.Context, c *app.RequestContext) {
 		limit := parsePositiveInt(c.Query("limit"), cfg.DefaultQueryLimit)
+		if limit <= 0 {
+			limit = cfg.DefaultQueryLimit
+		}
 		if limit > cfg.MaxQueryLimit {
 			limit = cfg.MaxQueryLimit
 		}
-		offset := parsePositiveInt(c.Query("offset"), 0)
 
-		rows, err := store.QueryEvents(ctx, EventQuery{
+		offset := parsePositiveInt(c.Query("offset"), -1)
+		page := parsePositiveInt(c.Query("page"), 1)
+		if page <= 0 {
+			page = 1
+		}
+		if offset < 0 {
+			offset = (page - 1) * limit
+		}
+
+		query := EventQuery{
 			Limit:        limit,
 			Offset:       offset,
 			Slug:         strings.TrimSpace(c.Query("slug")),
 			ActivityType: strings.TrimSpace(c.Query("type")),
 			Side:         strings.TrimSpace(c.Query("side")),
+		}
+
+		total, err := store.CountEvents(ctx, query)
+		if err != nil {
+			writeErr(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+		rows, err := store.QueryEvents(ctx, query)
+		if err != nil {
+			writeErr(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		writeOK(c, map[string]interface{}{
+			"limit":       limit,
+			"offset":      offset,
+			"page":        page,
+			"page_size":   limit,
+			"total":       total,
+			"total_pages": calcTotalPages(total, limit),
+			"items":       rows,
+		})
+	})
+
+	h.GET("/api/v1/slugs", func(ctx context.Context, c *app.RequestContext) {
+		pageSize := parsePositiveInt(c.Query("page_size"), 12)
+		if pageSize <= 0 {
+			pageSize = 12
+		}
+		if pageSize > 100 {
+			pageSize = 100
+		}
+		page := parsePositiveInt(c.Query("page"), 1)
+		if page <= 0 {
+			page = 1
+		}
+		offset := (page - 1) * pageSize
+
+		keyword := strings.TrimSpace(c.Query("keyword"))
+		items, total, err := store.QuerySlugSummaries(ctx, SlugSummaryQuery{
+			Limit:   pageSize,
+			Offset:  offset,
+			Keyword: keyword,
 		})
 		if err != nil {
 			writeErr(c, http.StatusInternalServerError, err.Error())
 			return
 		}
 		writeOK(c, map[string]interface{}{
-			"limit":  limit,
-			"offset": offset,
-			"items":  rows,
+			"page":        page,
+			"page_size":   pageSize,
+			"offset":      offset,
+			"total":       total,
+			"total_pages": calcTotalPages(total, pageSize),
+			"keyword":     keyword,
+			"items":       items,
 		})
 	})
 
@@ -111,6 +169,13 @@ func parsePositiveInt(raw string, fallback int) int {
 		return fallback
 	}
 	return v
+}
+
+func calcTotalPages(total int64, pageSize int) int {
+	if total <= 0 || pageSize <= 0 {
+		return 0
+	}
+	return int((total + int64(pageSize) - 1) / int64(pageSize))
 }
 
 func writeOK(c *app.RequestContext, data interface{}) {

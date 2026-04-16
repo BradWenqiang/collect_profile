@@ -5,226 +5,490 @@ const dashboardHTML = `<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PM Activity Console</title>
+  <title>PM Match Analyzer</title>
   <style>
-    @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+    @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap");
     :root {
-      --bg: #f5f7ff;
-      --panel: #ffffff;
-      --ink: #182039;
-      --muted: #5f6782;
-      --line: #d9def0;
-      --ok: #0a8f5d;
-      --warn: #d17d00;
-      --bad: #bb2a31;
-      --accent: #2d5bff;
-      --accent-soft: #dfe8ff;
-      --shadow: 0 10px 30px rgba(30, 47, 110, 0.12);
+      --bg: #eef4ea;
+      --paper: #ffffff;
+      --paper-soft: #f8fbf3;
+      --ink: #132232;
+      --muted: #546071;
+      --line: #d4ddcc;
+      --line-strong: #b7c5aa;
+      --accent: #0c7a53;
+      --accent-2: #1963d3;
+      --warn: #b65d1d;
+      --bad: #b73a39;
+      --good: #1e8a59;
+      --chip: #e6f7ef;
+      --shadow: 0 10px 28px rgba(15, 38, 28, 0.12);
+      --radius: 14px;
     }
+
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
-      font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
       color: var(--ink);
+      font-family: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
       background:
-        radial-gradient(1200px 550px at 80% -10%, #d9e4ff 0%, transparent 65%),
-        radial-gradient(1100px 500px at -10% 5%, #ffe5cc 0%, transparent 60%),
+        radial-gradient(900px 380px at 90% -10%, #dff0ff 0%, transparent 65%),
+        radial-gradient(1000px 420px at -10% 0%, #ffe9cf 0%, transparent 62%),
+        radial-gradient(1100px 500px at 50% 120%, #d8f0df 0%, transparent 70%),
         var(--bg);
       min-height: 100vh;
       line-height: 1.45;
     }
+
     .page {
-      width: min(1200px, calc(100vw - 32px));
-      margin: 22px auto 34px;
+      width: min(1400px, calc(100vw - 28px));
+      margin: 14px auto 24px;
+      animation: rise .35s ease;
     }
+
     .head {
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
       gap: 12px;
+      margin-bottom: 10px;
       flex-wrap: wrap;
-      margin-bottom: 14px;
     }
+
     .title {
       margin: 0;
-      font-size: clamp(24px, 4vw, 32px);
-      font-weight: 700;
+      font-size: clamp(22px, 3.4vw, 34px);
       letter-spacing: -0.03em;
+      font-weight: 800;
     }
+
     .sub {
-      margin: 2px 0 0;
+      margin: 4px 0 0;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 13px;
     }
+
     .badge {
       border: 1px solid var(--line);
       border-radius: 999px;
-      padding: 7px 12px;
+      padding: 8px 12px;
       background: #fff;
-      font-size: 13px;
-      color: var(--muted);
-      font-family: "IBM Plex Mono", Menlo, monospace;
+      color: #2d3f59;
+      font-family: "JetBrains Mono", Menlo, monospace;
+      font-size: 12px;
     }
-    .grid {
+
+    .cards {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
-    .card, .panel {
-      background: var(--panel);
+
+    .card,
+    .panel {
       border: 1px solid var(--line);
-      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: var(--radius);
       box-shadow: var(--shadow);
+      backdrop-filter: blur(5px);
     }
-    .card { padding: 12px 14px; }
-    .card .k { font-size: 12px; color: var(--muted); }
+
+    .card { padding: 12px; }
+
+    .card .k {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
     .card .v {
-      margin-top: 4px;
-      font-family: "IBM Plex Mono", Menlo, monospace;
+      margin-top: 6px;
+      font-family: "JetBrains Mono", Menlo, monospace;
       font-size: 18px;
       font-weight: 500;
       word-break: break-word;
     }
-    .panel { padding: 14px; margin-top: 10px; }
+
+    .panel {
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+
     .panel h2 {
-      margin: 0 0 10px;
-      font-size: 17px;
+      margin: 0;
+      font-size: 16px;
       letter-spacing: -0.01em;
     }
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
     .row {
       display: grid;
       grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 10px;
+      gap: 9px;
+      margin-top: 10px;
     }
+
     label {
       display: block;
       font-size: 12px;
       color: var(--muted);
       margin-bottom: 4px;
     }
-    input, select, button {
-      border-radius: 10px;
+
+    input,
+    button,
+    select {
+      width: 100%;
       border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
       background: #fff;
       color: var(--ink);
       font: inherit;
-      padding: 9px 10px;
+      min-height: 36px;
     }
-    input, select { width: 100%; }
+
     button {
       cursor: pointer;
-      transition: transform .08s ease, background .15s ease;
       font-weight: 600;
+      transition: transform .08s ease, filter .12s ease;
     }
+
+    button:hover { filter: brightness(0.97); }
     button:active { transform: translateY(1px); }
+
     .btn-primary {
-      background: var(--accent);
+      border-color: transparent;
+      background: linear-gradient(135deg, #10875b, #0d6f8a);
       color: #fff;
-      border-color: transparent;
     }
+
     .btn-soft {
-      background: var(--accent-soft);
-      color: #213ea8;
       border-color: transparent;
+      background: #e6f0ff;
+      color: #184596;
     }
-    .btn-warning {
-      background: #fff1dd;
-      color: #7d4a00;
+
+    .btn-warn {
       border-color: transparent;
+      background: #ffe9d8;
+      color: #7a4200;
     }
+
+    .btn-light {
+      background: #f6f8f2;
+      color: #2d4358;
+    }
+
     .ops {
+      margin-top: 9px;
       display: flex;
+      align-items: center;
       gap: 8px;
       flex-wrap: wrap;
-      margin-top: 10px;
+    }
+
+    .ops .inline-check {
+      display: inline-flex;
       align-items: center;
-    }
-    .hint {
-      font-size: 12px;
-      color: var(--muted);
-      margin-left: auto;
-    }
-    .mono {
-      font-family: "IBM Plex Mono", Menlo, monospace;
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 8px;
-      word-break: break-all;
-    }
-    .notice {
-      margin-top: 8px;
-      padding: 8px 10px;
-      border-radius: 10px;
+      gap: 6px;
+      margin: 0;
+      color: #385168;
       font-size: 13px;
-      display: none;
+      width: auto;
     }
-    .notice.show { display: block; }
-    .notice.ok { background: #e5f9ee; color: var(--ok); }
-    .notice.err { background: #ffe7e8; color: var(--bad); }
-    .table-wrap {
-      overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      margin-top: 10px;
-      background: #fff;
+
+    .ops .inline-check input {
+      width: auto;
+      min-height: 0;
+      padding: 0;
+      margin: 0;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 980px;
-    }
-    th, td {
-      border-bottom: 1px solid #eef1fb;
-      padding: 8px 10px;
-      text-align: left;
-      font-size: 13px;
-      vertical-align: top;
-    }
-    th {
-      position: sticky;
-      top: 0;
-      z-index: 1;
-      background: #f8faff;
-      font-size: 12px;
-      color: #4b567a;
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
-    }
-    td code {
-      font-family: "IBM Plex Mono", Menlo, monospace;
-      font-size: 12px;
-      color: #33468f;
-    }
+
     .status-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 8px;
+      margin-top: 10px;
     }
+
     .status-item {
-      padding: 8px;
-      background: #f7f9ff;
+      border: 1px solid #e7ede0;
       border-radius: 10px;
-      border: 1px solid #ebeffc;
+      background: #f7faf3;
+      padding: 9px;
     }
-    .status-item .s-k { font-size: 12px; color: var(--muted); }
+
+    .status-item .s-k {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
     .status-item .s-v {
-      margin-top: 2px;
-      font-family: "IBM Plex Mono", Menlo, monospace;
-      font-size: 13px;
+      margin-top: 4px;
+      font-family: "JetBrains Mono", Menlo, monospace;
+      font-size: 12px;
+      color: #25364a;
       word-break: break-word;
     }
-    @media (max-width: 1024px) {
-      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .status-grid { grid-template-columns: 1fr; }
-      .hint { width: 100%; margin-left: 0; }
+
+    .notice {
+      margin-top: 8px;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 13px;
+      display: none;
     }
-    @media (max-width: 640px) {
-      .page { width: calc(100vw - 20px); margin: 12px auto 20px; }
-      .grid { grid-template-columns: 1fr; }
-      .row { grid-template-columns: 1fr; }
-      .panel { padding: 10px; }
+
+    .notice.show { display: block; }
+    .notice.ok {
+      background: #e4f8ee;
+      color: #1b7f53;
+    }
+
+    .notice.err {
+      background: #ffe7e7;
+      color: #a53838;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(320px, 450px) minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1.2fr .8fr auto;
+      gap: 8px;
+      margin-top: 8px;
+      align-items: end;
+    }
+
+    .toolbar-2 {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .mono {
+      margin-top: 7px;
+      font-family: "JetBrains Mono", Menlo, monospace;
+      font-size: 12px;
+      color: #4f6077;
+      word-break: break-all;
+    }
+
+    .table-wrap {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: auto;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #edf1e8;
+      padding: 8px 10px;
+      text-align: left;
+      font-size: 12px;
+      vertical-align: top;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f2f7ee;
+      z-index: 1;
+      color: #485b73;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      font-size: 11px;
+    }
+
+    td code {
+      font-family: "JetBrains Mono", Menlo, monospace;
+      color: #2c4f88;
+      font-size: 11px;
+    }
+
+    .btn-link {
+      border: 1px solid #bdd4bf;
+      border-radius: 8px;
+      background: #f2faef;
+      color: #1f6d45;
+      padding: 5px 9px;
+      width: auto;
+      min-height: 0;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .row-selected {
+      background: #f3faf5;
+    }
+
+    .kpi-grid {
+      margin-top: 9px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .kpi {
+      border: 1px solid #dce6d0;
+      border-radius: 10px;
+      background: #f7fbf0;
+      padding: 8px;
+    }
+
+    .kpi .k {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .kpi .v {
+      margin-top: 4px;
+      font-family: "JetBrains Mono", Menlo, monospace;
+      font-size: 14px;
+      font-weight: 500;
+      word-break: break-word;
+    }
+
+    .tone-up { color: var(--good); }
+    .tone-down { color: var(--bad); }
+    .tone-warn { color: var(--warn); }
+
+    .analysis-box {
+      margin-top: 8px;
+      border: 1px solid #e5ecdb;
+      border-radius: 10px;
+      background: #f9fcf5;
+      padding: 10px;
+      font-size: 12px;
+      color: #2c3f53;
+    }
+
+    .analysis-box .line {
+      margin-top: 4px;
+    }
+
+    .combo-grid {
+      margin-top: 9px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .combo-card {
+      border: 1px solid #dfe8d5;
+      border-radius: 10px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .combo-head {
+      padding: 7px 9px;
+      border-bottom: 1px solid #e9f0e2;
+      background: #f7fbf2;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .combo-head .name {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .01em;
+    }
+
+    .combo-head .meta {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: "JetBrains Mono", Menlo, monospace;
+    }
+
+    .combo-table table {
+      min-width: 600px;
+    }
+
+    .empty-cell {
+      text-align: center;
+      color: #607082;
+      padding: 10px;
+    }
+
+    .wave-wrap {
+      margin-top: 9px;
+      border: 1px solid #dae5cf;
+      border-radius: 10px;
+      background: #fff;
+      overflow: auto;
+    }
+
+    .wave-wrap table {
+      min-width: 920px;
+    }
+
+    .pager {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .pager .meta {
+      font-size: 12px;
+      color: #41576f;
+      font-family: "JetBrains Mono", Menlo, monospace;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: .4;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 1200px) {
+      .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .split { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 880px) {
+      .row,
+      .toolbar,
+      .toolbar-2,
+      .status-grid,
+      .combo-grid { grid-template-columns: 1fr; }
+
+      .page {
+        width: calc(100vw - 16px);
+        margin-top: 8px;
+      }
     }
   </style>
 </head>
@@ -232,13 +496,13 @@ const dashboardHTML = `<!doctype html>
   <main class="page">
     <header class="head">
       <div>
-        <h1 class="title">PM Activity Console</h1>
-        <p class="sub">采集状态看板 + 手动同步 + 事件查询</p>
+        <h1 class="title">Polymarket 比赛分析台</h1>
+        <p class="sub">分页查询 + 按 slug 比赛视角展开 + buy/sell/up/down 四组合分析 + 波段时间判断</p>
       </div>
       <div class="badge" id="badge-health">service: checking</div>
     </header>
 
-    <section class="grid">
+    <section class="cards">
       <article class="card">
         <div class="k">Stored Events</div>
         <div class="v" id="v-stored">-</div>
@@ -258,7 +522,7 @@ const dashboardHTML = `<!doctype html>
     </section>
 
     <section class="panel">
-      <h2>服务状态</h2>
+      <h2>服务状态与同步</h2>
       <div class="status-grid">
         <div class="status-item">
           <div class="s-k">Last Success</div>
@@ -274,28 +538,206 @@ const dashboardHTML = `<!doctype html>
         </div>
       </div>
       <div class="ops">
-        <button class="btn-primary" id="btn-refresh-status">刷新状态</button>
-        <button class="btn-soft" id="btn-sync-fast">触发 Fast</button>
-        <button class="btn-warning" id="btn-sync-backfill">触发 Backfill</button>
-        <label style="display:flex;align-items:center;gap:6px;margin:0 0 0 6px;color:#445078;font-size:13px;">
-          <input id="auto-refresh" type="checkbox" checked style="width:auto;padding:0;margin:0;">
+        <button class="btn-primary" id="btn-refresh-status" style="width:auto;">刷新状态</button>
+        <button class="btn-soft" id="btn-sync-fast" style="width:auto;">触发 Fast</button>
+        <button class="btn-warn" id="btn-sync-backfill" style="width:auto;">触发 Backfill</button>
+        <label class="inline-check">
+          <input id="auto-refresh" type="checkbox" checked>
           自动刷新(10s)
         </label>
-        <span class="hint" id="status-config">listen=- / wallet=- / limit=-</span>
+        <span class="muted" id="status-config">listen=- / wallet=- / limit=-</span>
       </div>
       <div class="notice" id="notice"></div>
     </section>
 
+    <section class="split">
+      <section class="panel">
+        <h2>比赛列表（按 slug 分页）</h2>
+        <div class="toolbar">
+          <div>
+            <label for="slug-keyword">搜索 slug / title</label>
+            <input id="slug-keyword" type="text" placeholder="输入关键字" />
+          </div>
+          <div>
+            <label for="slug-page-size">每页</label>
+            <input id="slug-page-size" type="number" min="1" max="100" value="12" />
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn-primary" id="btn-slug-search">查询比赛</button>
+          </div>
+        </div>
+        <div class="pager">
+          <button class="btn-light" id="btn-slug-prev" style="width:auto;">上一页</button>
+          <button class="btn-light" id="btn-slug-next" style="width:auto;">下一页</button>
+          <span class="meta" id="slug-page-meta">-</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>slug</th>
+                <th>events</th>
+                <th>buy/sell</th>
+                <th>up/down</th>
+                <th>latest</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="slug-rows">
+              <tr><td colspan="6" class="empty-cell">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>比赛展开分析</h2>
+        <div class="toolbar-2">
+          <div>
+            <label for="detail-slug">当前 slug</label>
+            <input id="detail-slug" type="text" placeholder="请点击左侧比赛" readonly />
+          </div>
+          <div>
+            <label for="detail-wave-gap">波段间隔(秒)</label>
+            <input id="detail-wave-gap" type="number" min="10" max="900" value="120" />
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn-soft" id="detail-refresh">刷新当前比赛</button>
+          </div>
+        </div>
+
+        <div class="mono" id="detail-note">请选择左侧 slug，系统会自动按比赛聚合并做分析。</div>
+        <div class="kpi-grid" id="detail-kpis"></div>
+
+        <div class="analysis-box" id="detail-summary">
+          还没有比赛数据。
+        </div>
+
+        <div class="combo-grid">
+          <section class="combo-card">
+            <div class="combo-head">
+              <span class="name">Buy + Up</span>
+              <span class="meta" id="meta-buy-up">-</span>
+            </div>
+            <div class="combo-table table-wrap" style="margin-top:0;border:none;border-radius:0;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>time</th>
+                    <th>price</th>
+                    <th>qty</th>
+                    <th>usdc</th>
+                    <th>outcome</th>
+                    <th>tx</th>
+                  </tr>
+                </thead>
+                <tbody id="combo-buy-up"><tr><td colspan="6" class="empty-cell">暂无数据</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="combo-card">
+            <div class="combo-head">
+              <span class="name">Buy + Down</span>
+              <span class="meta" id="meta-buy-down">-</span>
+            </div>
+            <div class="combo-table table-wrap" style="margin-top:0;border:none;border-radius:0;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>time</th>
+                    <th>price</th>
+                    <th>qty</th>
+                    <th>usdc</th>
+                    <th>outcome</th>
+                    <th>tx</th>
+                  </tr>
+                </thead>
+                <tbody id="combo-buy-down"><tr><td colspan="6" class="empty-cell">暂无数据</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="combo-card">
+            <div class="combo-head">
+              <span class="name">Sell + Up</span>
+              <span class="meta" id="meta-sell-up">-</span>
+            </div>
+            <div class="combo-table table-wrap" style="margin-top:0;border:none;border-radius:0;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>time</th>
+                    <th>price</th>
+                    <th>qty</th>
+                    <th>usdc</th>
+                    <th>outcome</th>
+                    <th>tx</th>
+                  </tr>
+                </thead>
+                <tbody id="combo-sell-up"><tr><td colspan="6" class="empty-cell">暂无数据</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="combo-card">
+            <div class="combo-head">
+              <span class="name">Sell + Down</span>
+              <span class="meta" id="meta-sell-down">-</span>
+            </div>
+            <div class="combo-table table-wrap" style="margin-top:0;border:none;border-radius:0;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>time</th>
+                    <th>price</th>
+                    <th>qty</th>
+                    <th>usdc</th>
+                    <th>outcome</th>
+                    <th>tx</th>
+                  </tr>
+                </thead>
+                <tbody id="combo-sell-down"><tr><td colspan="6" class="empty-cell">暂无数据</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <h2 style="margin-top:12px;">波段时间分析（先后顺序）</h2>
+        <div class="wave-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>start</th>
+                <th>end</th>
+                <th>span(s)</th>
+                <th>records</th>
+                <th>先后关系</th>
+                <th>首尾组合</th>
+                <th>Buy配对盈亏</th>
+                <th>Sell配对盈亏</th>
+                <th>总估算</th>
+              </tr>
+            </thead>
+            <tbody id="wave-rows">
+              <tr><td colspan="10" class="empty-cell">暂无波段数据</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
     <section class="panel">
-      <h2>事件查询</h2>
+      <h2>事件明细查询（支持分页）</h2>
       <div class="row">
         <div>
-          <label for="q-limit">limit</label>
+          <label for="q-limit">page_size</label>
           <input id="q-limit" type="number" min="1" max="500" value="100" />
         </div>
         <div>
-          <label for="q-offset">offset</label>
-          <input id="q-offset" type="number" min="0" value="0" />
+          <label for="q-page">page</label>
+          <input id="q-page" type="number" min="1" value="1" />
         </div>
         <div>
           <label for="q-slug">slug</label>
@@ -307,13 +749,21 @@ const dashboardHTML = `<!doctype html>
         </div>
         <div>
           <label for="q-side">side</label>
-          <input id="q-side" type="text" placeholder="buy / sell ..." />
+          <input id="q-side" type="text" placeholder="buy / sell" />
         </div>
         <div style="display:flex;align-items:flex-end;">
-          <button class="btn-primary" id="btn-query" style="width:100%;">查询事件</button>
+          <button class="btn-primary" id="btn-query">查询</button>
         </div>
       </div>
+
+      <div class="pager">
+        <button class="btn-light" id="btn-events-prev" style="width:auto;">上一页</button>
+        <button class="btn-light" id="btn-events-next" style="width:auto;">下一页</button>
+        <button class="btn-light" id="btn-query-reset" style="width:auto;">重置过滤</button>
+        <span class="meta" id="events-page-meta">-</span>
+      </div>
       <div class="mono" id="query-meta">query: /api/v1/events</div>
+
       <div class="table-wrap">
         <table>
           <thead>
@@ -331,7 +781,7 @@ const dashboardHTML = `<!doctype html>
             </tr>
           </thead>
           <tbody id="rows">
-            <tr><td colspan="10" style="text-align:center;color:#667;">加载中...</td></tr>
+            <tr><td colspan="10" class="empty-cell">加载中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -345,21 +795,42 @@ const dashboardHTML = `<!doctype html>
       var autoRefreshBox = document.getElementById("auto-refresh");
       var timer = null;
 
+      var state = {
+        slugPage: 1,
+        slugTotalPages: 0,
+        slugPageSize: 12,
+        slugKeyword: "",
+        selectedSlug: "",
+        eventPage: 1,
+        eventTotalPages: 0,
+        eventPageSize: 100
+      };
+
       function escapeHTML(v) {
         return String(v == null ? "" : v)
           .replace(/&/g, "&amp;")
           .replace(/</g, "&lt;")
           .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
+          .replace(/\"/g, "&quot;")
           .replace(/'/g, "&#39;");
       }
 
-      function showNotice(msg, isError) {
-        notice.textContent = msg;
-        notice.className = "notice show " + (isError ? "err" : "ok");
-        setTimeout(function () {
-          notice.className = "notice";
-        }, 3000);
+      function parseNumber(v) {
+        var n = Number(v);
+        if (!Number.isFinite(n)) return 0;
+        return n;
+      }
+
+      function toInt(v, fallback) {
+        var n = parseInt(v, 10);
+        if (!Number.isFinite(n) || n <= 0) return fallback;
+        return n;
+      }
+
+      function clamp(n, min, max) {
+        if (n < min) return min;
+        if (n > max) return max;
+        return n;
       }
 
       function fmtTime(raw) {
@@ -370,10 +841,17 @@ const dashboardHTML = `<!doctype html>
       }
 
       function fmtMS(ms) {
-        if (!ms || ms <= 0) return "-";
-        var d = new Date(ms);
+        var v = Number(ms || 0);
+        if (!v || v <= 0) return "-";
+        var d = new Date(v);
         if (isNaN(d.getTime())) return "-";
         return d.toLocaleString();
+      }
+
+      function fmtNum(v, digits) {
+        if (!Number.isFinite(v)) return "-";
+        var d = Number.isFinite(digits) ? digits : 4;
+        return Number(v).toFixed(d);
       }
 
       function shortTx(tx) {
@@ -383,91 +861,354 @@ const dashboardHTML = `<!doctype html>
         return s.slice(0, 8) + "..." + s.slice(-6);
       }
 
+      function showNotice(msg, isError) {
+        notice.textContent = msg;
+        notice.className = "notice show " + (isError ? "err" : "ok");
+        setTimeout(function () {
+          notice.className = "notice";
+        }, 3200);
+      }
+
       async function request(path, options) {
         var res = await fetch(path, options || {});
         var body = await res.json();
-        if (!res.ok || body.code !== 20000) {
+        if (!res.ok || !body || body.code !== 20000) {
           throw new Error((body && body.message) || ("HTTP " + res.status));
         }
         return body.data;
       }
 
-      function readEventQuery() {
-        var p = new URLSearchParams();
-        var limit = document.getElementById("q-limit").value.trim();
-        var offset = document.getElementById("q-offset").value.trim();
-        var slug = document.getElementById("q-slug").value.trim();
-        var type = document.getElementById("q-type").value.trim();
-        var side = document.getElementById("q-side").value.trim();
-        if (limit) p.set("limit", limit);
-        if (offset) p.set("offset", offset);
-        if (slug) p.set("slug", slug);
-        if (type) p.set("type", type);
-        if (side) p.set("side", side);
-        return p.toString();
+      function getEventTimestampMs(e) {
+        var ts = Number(e && e.timestamp_ms);
+        if (Number.isFinite(ts) && ts > 0) return ts;
+        if (e && e.event_time) {
+          var d = new Date(e.event_time);
+          if (!isNaN(d.getTime())) return d.getTime();
+        }
+        return 0;
+      }
+
+      function normalizeSide(raw) {
+        var s = String(raw || "").trim().toLowerCase();
+        if (!s) return "";
+        if (s.indexOf("buy") >= 0 || s.indexOf("买") >= 0) return "buy";
+        if (s.indexOf("sell") >= 0 || s.indexOf("卖") >= 0) return "sell";
+        return "";
+      }
+
+      function normalizeDirection(e) {
+        var raw = String((e && e.outcome) || "").trim().toLowerCase();
+        if (!raw && e && e.outcome_index != null) {
+          var idxOnly = Number(e.outcome_index);
+          if (idxOnly === 0) return "up";
+          if (idxOnly === 1) return "down";
+        }
+
+        var upWords = ["up", "yes", "long", "higher", "bull", "上涨", "看涨", "涨"];
+        var downWords = ["down", "no", "short", "lower", "bear", "下跌", "看跌", "跌"];
+
+        var i;
+        for (i = 0; i < upWords.length; i++) {
+          if (raw.indexOf(upWords[i]) >= 0) return "up";
+        }
+        for (i = 0; i < downWords.length; i++) {
+          if (raw.indexOf(downWords[i]) >= 0) return "down";
+        }
+
+        var idx = Number(e && e.outcome_index);
+        if (idx === 0) return "up";
+        if (idx === 1) return "down";
+        return "";
+      }
+
+      function deriveQty(e, price) {
+        var q = parseNumber(e && e.size);
+        if (q > 0) return q;
+        var usdc = parseNumber(e && e.usdc_size);
+        if (usdc > 0 && price > 0) {
+          var converted = usdc / price;
+          if (Number.isFinite(converted) && converted > 0) return converted;
+        }
+        return 1;
+      }
+
+      function normalizeRecord(e) {
+        var side = normalizeSide(e && e.side);
+        var direction = normalizeDirection(e);
+        var combo = (side && direction) ? (side + "_" + direction) : "";
+        var price = parseNumber(e && e.price);
+        var qty = deriveQty(e, price);
+        return {
+          raw: e,
+          ts: getEventTimestampMs(e),
+          side: side,
+          direction: direction,
+          combo: combo,
+          price: price,
+          qty: qty,
+          usdc: parseNumber(e && e.usdc_size)
+        };
+      }
+
+      function comboLabel(combo) {
+        if (combo === "buy_up") return "buy-up";
+        if (combo === "buy_down") return "buy-down";
+        if (combo === "sell_up") return "sell-up";
+        if (combo === "sell_down") return "sell-down";
+        return "unknown";
+      }
+
+      function pairLegs(upLegs, downLegs, side) {
+        var eps = 1e-9;
+        var ups = upLegs.slice().sort(function (a, b) { return a.ts - b.ts; }).map(function (x) {
+          return { item: x, remain: x.qty > 0 ? x.qty : 0 };
+        });
+        var downs = downLegs.slice().sort(function (a, b) { return a.ts - b.ts; }).map(function (x) {
+          return { item: x, remain: x.qty > 0 ? x.qty : 0 };
+        });
+
+        var totalUpQty = 0;
+        var totalDownQty = 0;
+        var k;
+        for (k = 0; k < upLegs.length; k++) totalUpQty += upLegs[k].qty;
+        for (k = 0; k < downLegs.length; k++) totalDownQty += downLegs[k].qty;
+
+        var i = 0;
+        var j = 0;
+        var pairedQty = 0;
+        var pairedPnl = 0;
+        var samples = [];
+
+        while (i < ups.length && j < downs.length) {
+          if (ups[i].remain <= eps) { i += 1; continue; }
+          if (downs[j].remain <= eps) { j += 1; continue; }
+
+          var matched = Math.min(ups[i].remain, downs[j].remain);
+          if (matched <= eps) break;
+
+          var priceSum = ups[i].item.price + downs[j].item.price;
+          var edgePerUnit = side === "buy" ? (1 - priceSum) : (priceSum - 1);
+          var pnl = edgePerUnit * matched;
+
+          pairedQty += matched;
+          pairedPnl += pnl;
+
+          if (samples.length < 12) {
+            samples.push({
+              matchedQty: matched,
+              edgePerUnit: edgePerUnit,
+              pnl: pnl,
+              order: ups[i].item.ts <= downs[j].item.ts ? "up->down" : "down->up",
+              upTs: ups[i].item.ts,
+              downTs: downs[j].item.ts,
+              upPrice: ups[i].item.price,
+              downPrice: downs[j].item.price
+            });
+          }
+
+          ups[i].remain -= matched;
+          downs[j].remain -= matched;
+        }
+
+        var base = Math.max(totalUpQty, totalDownQty);
+        var symmetryRate = base > eps ? (pairedQty / base) : 0;
+
+        return {
+          totalUpQty: totalUpQty,
+          totalDownQty: totalDownQty,
+          pairedQty: pairedQty,
+          pairedPnl: pairedPnl,
+          avgEdgePerUnit: pairedQty > eps ? (pairedPnl / pairedQty) : 0,
+          symmetryRate: symmetryRate,
+          unpairedUpQty: Math.max(0, totalUpQty - pairedQty),
+          unpairedDownQty: Math.max(0, totalDownQty - pairedQty),
+          samples: samples
+        };
+      }
+
+      function buildWaves(records, gapSec) {
+        var list = records.slice().filter(function (r) { return r.ts > 0 && r.combo; });
+        if (!list.length) return [];
+        list.sort(function (a, b) { return a.ts - b.ts; });
+
+        var gapMs = Math.max(10, gapSec || 120) * 1000;
+        var waves = [];
+        var current = null;
+        var idx;
+
+        for (idx = 0; idx < list.length; idx++) {
+          var rec = list[idx];
+          if (!current || rec.ts - current.endTs > gapMs) {
+            if (current) waves.push(current);
+            current = {
+              startTs: rec.ts,
+              endTs: rec.ts,
+              events: [rec]
+            };
+          } else {
+            current.events.push(rec);
+            current.endTs = rec.ts;
+          }
+        }
+        if (current) waves.push(current);
+
+        return waves.map(function (w, i) {
+          var counts = {
+            buy_up: 0,
+            buy_down: 0,
+            sell_up: 0,
+            sell_down: 0
+          };
+
+          var x;
+          for (x = 0; x < w.events.length; x++) {
+            if (counts[w.events[x].combo] != null) counts[w.events[x].combo] += 1;
+          }
+
+          var first = w.events[0];
+          var last = w.events[w.events.length - 1];
+
+          var firstUpTs = 0;
+          var firstDownTs = 0;
+          for (x = 0; x < w.events.length; x++) {
+            if (!firstUpTs && w.events[x].direction === "up") firstUpTs = w.events[x].ts;
+            if (!firstDownTs && w.events[x].direction === "down") firstDownTs = w.events[x].ts;
+          }
+
+          var orderHint = "方向不明";
+          if (firstUpTs && firstDownTs) {
+            orderHint = firstUpTs <= firstDownTs ? "先上后下" : "先下后上";
+          } else if (firstUpTs) {
+            orderHint = "只有上腿";
+          } else if (firstDownTs) {
+            orderHint = "只有下腿";
+          }
+
+          var buyP = pairLegs(
+            w.events.filter(function (r) { return r.combo === "buy_up"; }),
+            w.events.filter(function (r) { return r.combo === "buy_down"; }),
+            "buy"
+          );
+          var sellP = pairLegs(
+            w.events.filter(function (r) { return r.combo === "sell_up"; }),
+            w.events.filter(function (r) { return r.combo === "sell_down"; }),
+            "sell"
+          );
+
+          return {
+            index: i + 1,
+            startTs: w.startTs,
+            endTs: w.endTs,
+            spanSec: Math.max(0, Math.round((w.endTs - w.startTs) / 1000)),
+            records: w.events.length,
+            orderHint: orderHint,
+            firstCombo: comboLabel(first.combo),
+            lastCombo: comboLabel(last.combo),
+            buyPnl: buyP.pairedPnl,
+            sellPnl: sellP.pairedPnl,
+            totalPnl: buyP.pairedPnl + sellP.pairedPnl,
+            comboCounts: counts
+          };
+        });
+      }
+
+      function analyzeSlugEvents(events, waveGapSec) {
+        var normalized = events.map(normalizeRecord);
+        var buckets = {
+          buy_up: [],
+          buy_down: [],
+          sell_up: [],
+          sell_down: []
+        };
+        var unknown = [];
+
+        var i;
+        for (i = 0; i < normalized.length; i++) {
+          var r = normalized[i];
+          if (buckets[r.combo]) {
+            buckets[r.combo].push(r);
+          } else {
+            unknown.push(r);
+          }
+        }
+
+        Object.keys(buckets).forEach(function (k) {
+          buckets[k].sort(function (a, b) { return a.ts - b.ts; });
+        });
+
+        var buyPair = pairLegs(buckets.buy_up, buckets.buy_down, "buy");
+        var sellPair = pairLegs(buckets.sell_up, buckets.sell_down, "sell");
+
+        var totalPairedQty = buyPair.pairedQty + sellPair.pairedQty;
+        var totalPnl = buyPair.pairedPnl + sellPair.pairedPnl;
+
+        var verdict = "样本不足（没有可配对上下腿）";
+        if (totalPairedQty > 0) {
+          if (totalPnl > 0.000001) verdict = "偏赚钱";
+          else if (totalPnl < -0.000001) verdict = "偏赔钱";
+          else verdict = "接近平衡";
+        }
+
+        var riskParts = [];
+        if (buyPair.symmetryRate < 0.9 && (buyPair.totalUpQty > 0 || buyPair.totalDownQty > 0)) {
+          riskParts.push("Buy 组合单边风险较高");
+        }
+        if (sellPair.symmetryRate < 0.9 && (sellPair.totalUpQty > 0 || sellPair.totalDownQty > 0)) {
+          riskParts.push("Sell 组合单边风险较高");
+        }
+        if (!riskParts.length) {
+          riskParts.push("对称度较好，接近可配对状态");
+        }
+
+        var knownRecords = [];
+        Object.keys(buckets).forEach(function (k) {
+          knownRecords = knownRecords.concat(buckets[k]);
+        });
+        var waves = buildWaves(knownRecords, waveGapSec);
+
+        return {
+          buckets: buckets,
+          unknown: unknown,
+          buyPair: buyPair,
+          sellPair: sellPair,
+          totalPnl: totalPnl,
+          totalPairedQty: totalPairedQty,
+          verdict: verdict,
+          riskText: riskParts.join("；"),
+          waves: waves
+        };
+      }
+
+      function renderStatusSummary(data) {
+        var poller = data.poller || {};
+        var cfg = data.config || {};
+
+        badgeHealth.textContent = "service: online";
+        badgeHealth.style.color = "#1e8a59";
+
+        document.getElementById("v-stored").textContent = String(data.stored_events || 0);
+        document.getElementById("v-last").textContent = String(poller.last_fetched_rows || 0) + " / " + String(poller.last_inserted_rows || 0);
+        document.getElementById("v-total").textContent = String(poller.total_fetched_rows || 0) + " / " + String(poller.total_inserted_rows || 0) + " / " + String(poller.total_duplicate_rows || 0);
+        document.getElementById("v-queue").textContent = String(poller.queue_len || 0) + " / " + (poller.running ? "running" : "idle");
+
+        document.getElementById("s-success").textContent = fmtTime(poller.last_success_at);
+        document.getElementById("s-error").textContent = poller.last_error ? (fmtTime(poller.last_error_at) + " | " + poller.last_error) : "-";
+        document.getElementById("s-ts").textContent = fmtMS(poller.last_newest_ts) + " / " + fmtMS(poller.last_oldest_ts);
+
+        document.getElementById("status-config").textContent =
+          "listen=" + (cfg.listen_addr || "-") +
+          " / wallet=" + (cfg.user_wallet || "-") +
+          " / limit=" + (cfg.page_limit || "-");
       }
 
       async function loadStatus() {
         try {
           var data = await request("/api/v1/status");
-          var poller = data.poller || {};
-          var cfg = data.config || {};
-          badgeHealth.textContent = "service: online";
-          badgeHealth.style.color = "#0a8f5d";
-
-          document.getElementById("v-stored").textContent = String(data.stored_events || 0);
-          document.getElementById("v-last").textContent = String(poller.last_fetched_rows || 0) + " / " + String(poller.last_inserted_rows || 0);
-          document.getElementById("v-total").textContent = String(poller.total_fetched_rows || 0) + " / " + String(poller.total_inserted_rows || 0) + " / " + String(poller.total_duplicate_rows || 0);
-          document.getElementById("v-queue").textContent = String(poller.queue_len || 0) + " / " + (poller.running ? "running" : "idle");
-
-          document.getElementById("s-success").textContent = fmtTime(poller.last_success_at);
-          document.getElementById("s-error").textContent = poller.last_error ? fmtTime(poller.last_error_at) + " | " + poller.last_error : "-";
-          document.getElementById("s-ts").textContent = fmtMS(poller.last_newest_ts) + " / " + fmtMS(poller.last_oldest_ts);
-
-          document.getElementById("status-config").textContent =
-            "listen=" + (cfg.listen_addr || "-") +
-            " / wallet=" + (cfg.user_wallet || "-") +
-            " / limit=" + (cfg.page_limit || "-");
+          renderStatusSummary(data);
         } catch (err) {
           badgeHealth.textContent = "service: offline";
-          badgeHealth.style.color = "#bb2a31";
+          badgeHealth.style.color = "#b73a39";
           showNotice("状态刷新失败: " + err.message, true);
-        }
-      }
-
-      function renderRows(items) {
-        var tbody = document.getElementById("rows");
-        if (!Array.isArray(items) || items.length === 0) {
-          tbody.innerHTML = "<tr><td colspan=\"10\" style=\"text-align:center;color:#667;\">暂无数据</td></tr>";
-          return;
-        }
-        var html = items.map(function (e) {
-          var eventTime = e.timestamp_ms ? fmtMS(e.timestamp_ms) : fmtTime(e.event_time);
-          return "<tr>" +
-            "<td>" + escapeHTML(eventTime) + "</td>" +
-            "<td>" + escapeHTML(e.activity_type || "-") + "</td>" +
-            "<td>" + escapeHTML(e.side || "-") + "</td>" +
-            "<td>" + escapeHTML(e.slug || "-") + "</td>" +
-            "<td>" + escapeHTML(e.outcome || "-") + "</td>" +
-            "<td>" + escapeHTML(e.price || "-") + "</td>" +
-            "<td>" + escapeHTML(e.usdc_size || "-") + "</td>" +
-            "<td>" + escapeHTML(e.size || "-") + "</td>" +
-            "<td><code>" + escapeHTML(shortTx(e.transaction_hash)) + "</code></td>" +
-            "<td>" + escapeHTML(String(e.source_offset || 0) + "/" + String(e.source_index || 0)) + "</td>" +
-            "</tr>";
-        }).join("");
-        tbody.innerHTML = html;
-      }
-
-      async function loadEvents() {
-        var query = readEventQuery();
-        var endpoint = "/api/v1/events" + (query ? ("?" + query) : "");
-        document.getElementById("query-meta").textContent = "query: " + endpoint;
-        try {
-          var data = await request(endpoint);
-          renderRows(data.items || []);
-        } catch (err) {
-          showNotice("事件查询失败: " + err.message, true);
         }
       }
 
@@ -485,6 +1226,324 @@ const dashboardHTML = `<!doctype html>
         }
       }
 
+      function readSlugFilters() {
+        var pageSize = clamp(toInt(document.getElementById("slug-page-size").value, state.slugPageSize || 12), 1, 100);
+        state.slugPageSize = pageSize;
+        state.slugKeyword = document.getElementById("slug-keyword").value.trim();
+      }
+
+      function renderSlugRows(items) {
+        var tbody = document.getElementById("slug-rows");
+        if (!items || !items.length) {
+          tbody.innerHTML = "<tr><td colspan=\"6\" class=\"empty-cell\">暂无比赛</td></tr>";
+          return;
+        }
+
+        var html = items.map(function (s) {
+          var slug = String(s.slug || "");
+          var selected = state.selectedSlug && state.selectedSlug === slug ? "row-selected" : "";
+          var actionSlug = encodeURIComponent(slug);
+          return "<tr class=\"" + selected + "\">" +
+            "<td><code>" + escapeHTML(slug || "-") + "</code></td>" +
+            "<td>" + escapeHTML(String(s.event_count || 0)) + "</td>" +
+            "<td>" + escapeHTML(String(s.buy_count || 0) + " / " + String(s.sell_count || 0)) + "</td>" +
+            "<td>" + escapeHTML(String(s.up_count || 0) + " / " + String(s.down_count || 0)) + "</td>" +
+            "<td>" + escapeHTML(fmtMS(s.last_timestamp_ms || 0)) + "</td>" +
+            "<td><button class=\"btn-link btn-open-slug\" data-slug=\"" + actionSlug + "\">展开</button></td>" +
+            "</tr>";
+        }).join("");
+        tbody.innerHTML = html;
+      }
+
+      function renderSlugPager(data) {
+        var page = Number(data.page || 1);
+        var total = Number(data.total || 0);
+        var pages = Number(data.total_pages || 0);
+        if (!Number.isFinite(page) || page <= 0) page = 1;
+        if (!Number.isFinite(pages) || pages < 0) pages = 0;
+
+        state.slugPage = page;
+        state.slugTotalPages = pages;
+
+        document.getElementById("slug-page-meta").textContent = "第 " + page + " / " + Math.max(1, pages) + " 页，共 " + total + " 场";
+        document.getElementById("btn-slug-prev").disabled = page <= 1;
+        document.getElementById("btn-slug-next").disabled = pages <= 0 || page >= pages;
+      }
+
+      async function loadSlugs(page) {
+        readSlugFilters();
+        var targetPage = clamp(toInt(page, state.slugPage || 1), 1, 999999);
+        var params = new URLSearchParams();
+        params.set("page", String(targetPage));
+        params.set("page_size", String(state.slugPageSize));
+        if (state.slugKeyword) params.set("keyword", state.slugKeyword);
+
+        try {
+          var data = await request("/api/v1/slugs?" + params.toString());
+          renderSlugRows(data.items || []);
+          renderSlugPager(data);
+        } catch (err) {
+          showNotice("slug 查询失败: " + err.message, true);
+        }
+      }
+
+      async function fetchAllEventsBySlug(slug) {
+        var limit = 200;
+        var maxPages = 30;
+        var all = [];
+        var total = 0;
+        var page = 1;
+
+        while (page <= maxPages) {
+          var params = new URLSearchParams();
+          params.set("slug", slug);
+          params.set("limit", String(limit));
+          params.set("page", String(page));
+
+          var data = await request("/api/v1/events?" + params.toString());
+          var items = Array.isArray(data.items) ? data.items : [];
+
+          if (page === 1) {
+            total = Number(data.total || 0);
+          }
+
+          all = all.concat(items);
+
+          if (!items.length || all.length >= total) {
+            break;
+          }
+          page += 1;
+        }
+
+        return {
+          items: all,
+          total: total,
+          truncated: all.length < total
+        };
+      }
+
+      function renderComboBody(tbodyID, list) {
+        var tbody = document.getElementById(tbodyID);
+        if (!tbody) return;
+        if (!list || !list.length) {
+          tbody.innerHTML = "<tr><td colspan=\"6\" class=\"empty-cell\">暂无</td></tr>";
+          return;
+        }
+
+        var sorted = list.slice().sort(function (a, b) { return b.ts - a.ts; });
+        var showLimit = 80;
+        var show = sorted.slice(0, showLimit);
+
+        var html = show.map(function (r) {
+          return "<tr>" +
+            "<td>" + escapeHTML(fmtMS(r.ts)) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(r.price, 4)) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(r.qty, 4)) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(r.usdc, 4)) + "</td>" +
+            "<td>" + escapeHTML(String((r.raw && r.raw.outcome) || "-")) + "</td>" +
+            "<td><code>" + escapeHTML(shortTx(r.raw && r.raw.transaction_hash)) + "</code></td>" +
+            "</tr>";
+        }).join("");
+
+        if (sorted.length > show.length) {
+          html += "<tr><td colspan=\"6\" class=\"empty-cell\">仅展示最新 " + show.length + " 条，共 " + sorted.length + " 条</td></tr>";
+        }
+
+        tbody.innerHTML = html;
+      }
+
+      function renderWaveRows(waves) {
+        var tbody = document.getElementById("wave-rows");
+        if (!waves || !waves.length) {
+          tbody.innerHTML = "<tr><td colspan=\"10\" class=\"empty-cell\">暂无波段数据</td></tr>";
+          return;
+        }
+
+        var html = waves.map(function (w) {
+          return "<tr>" +
+            "<td>" + escapeHTML(String(w.index)) + "</td>" +
+            "<td>" + escapeHTML(fmtMS(w.startTs)) + "</td>" +
+            "<td>" + escapeHTML(fmtMS(w.endTs)) + "</td>" +
+            "<td>" + escapeHTML(String(w.spanSec)) + "</td>" +
+            "<td>" + escapeHTML(String(w.records)) + "</td>" +
+            "<td>" + escapeHTML(w.orderHint) + "</td>" +
+            "<td>" + escapeHTML(w.firstCombo + " -> " + w.lastCombo) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(w.buyPnl, 6)) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(w.sellPnl, 6)) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(w.totalPnl, 6)) + "</td>" +
+            "</tr>";
+        }).join("");
+
+        tbody.innerHTML = html;
+      }
+
+      function renderDetail(slug, fetched, analyzed) {
+        document.getElementById("detail-slug").value = slug || "";
+
+        var totalRecords = fetched.items.length;
+        var buy = analyzed.buyPair;
+        var sell = analyzed.sellPair;
+
+        var combinedSymmetry = 0;
+        if (buy.symmetryRate > 0 || sell.symmetryRate > 0) {
+          combinedSymmetry = (buy.symmetryRate + sell.symmetryRate) / ((buy.symmetryRate > 0 && sell.symmetryRate > 0) ? 2 : 1);
+          if (!Number.isFinite(combinedSymmetry)) combinedSymmetry = 0;
+        }
+
+        var pnlClass = analyzed.totalPnl >= 0 ? "tone-up" : "tone-down";
+        var symmetryClass = combinedSymmetry >= 0.9 ? "tone-up" : "tone-warn";
+
+        var kpis = [
+          { k: "总记录", v: String(totalRecords), c: "" },
+          { k: "可配对数量", v: fmtNum(analyzed.totalPairedQty, 4), c: "" },
+          { k: "估算总盈亏", v: fmtNum(analyzed.totalPnl, 6), c: pnlClass },
+          { k: "平均对称度", v: fmtNum(combinedSymmetry * 100, 2) + "%", c: symmetryClass }
+        ];
+
+        document.getElementById("detail-kpis").innerHTML = kpis.map(function (x) {
+          return "<div class=\"kpi\">" +
+            "<div class=\"k\">" + escapeHTML(x.k) + "</div>" +
+            "<div class=\"v " + escapeHTML(x.c || "") + "\">" + escapeHTML(x.v) + "</div>" +
+            "</div>";
+        }).join("");
+
+        var lines = [];
+        lines.push("结论: " + analyzed.verdict + "；" + analyzed.riskText);
+        lines.push("Buy 配对公式: (1 - (up_price + down_price)) * 配对数量。当前配对数量=" + fmtNum(buy.pairedQty, 4) + "，估算=" + fmtNum(buy.pairedPnl, 6) + "，对称度=" + fmtNum(buy.symmetryRate * 100, 2) + "%");
+        lines.push("Sell 配对公式: ((up_price + down_price) - 1) * 配对数量。当前配对数量=" + fmtNum(sell.pairedQty, 4) + "，估算=" + fmtNum(sell.pairedPnl, 6) + "，对称度=" + fmtNum(sell.symmetryRate * 100, 2) + "%");
+        lines.push("示例: 如果 buy-up=0.05 且 buy-down=0.92，则 1-(0.05+0.92)=0.03，理论上这对是赚钱的（前提是数量可配对）。");
+        lines.push("未知方向记录: " + analyzed.unknown.length + " 条（outcome 无法识别为 up/down 时计入）。");
+
+        document.getElementById("detail-summary").innerHTML = lines.map(function (x) {
+          return "<div class=\"line\">" + escapeHTML(x) + "</div>";
+        }).join("");
+
+        var truncatedText = fetched.truncated ? "注意: 当前只分析了前 " + fetched.items.length + " 条，库内总量约 " + fetched.total + " 条（已触发保护上限）。" : "分析覆盖记录: " + fetched.items.length + " / " + fetched.total;
+        document.getElementById("detail-note").textContent = truncatedText;
+
+        renderComboBody("combo-buy-up", analyzed.buckets.buy_up);
+        renderComboBody("combo-buy-down", analyzed.buckets.buy_down);
+        renderComboBody("combo-sell-up", analyzed.buckets.sell_up);
+        renderComboBody("combo-sell-down", analyzed.buckets.sell_down);
+
+        document.getElementById("meta-buy-up").textContent = "count=" + analyzed.buckets.buy_up.length;
+        document.getElementById("meta-buy-down").textContent = "count=" + analyzed.buckets.buy_down.length;
+        document.getElementById("meta-sell-up").textContent = "count=" + analyzed.buckets.sell_up.length;
+        document.getElementById("meta-sell-down").textContent = "count=" + analyzed.buckets.sell_down.length;
+
+        renderWaveRows(analyzed.waves);
+      }
+
+      async function loadSlugDetail(slug) {
+        if (!slug) return;
+
+        document.getElementById("detail-slug").value = slug;
+        document.getElementById("detail-note").textContent = "正在加载比赛数据并分析...";
+        document.getElementById("detail-summary").innerHTML = "<div class=\"line\">加载中...</div>";
+
+        try {
+          var fetched = await fetchAllEventsBySlug(slug);
+          var waveGapSec = clamp(toInt(document.getElementById("detail-wave-gap").value, 120), 10, 900);
+          var analyzed = analyzeSlugEvents(fetched.items, waveGapSec);
+          renderDetail(slug, fetched, analyzed);
+        } catch (err) {
+          document.getElementById("detail-note").textContent = "分析失败";
+          showNotice("加载比赛详情失败: " + err.message, true);
+        }
+      }
+
+      async function selectSlug(slug) {
+        if (!slug) return;
+        state.selectedSlug = slug;
+        document.getElementById("q-slug").value = slug;
+        await loadSlugDetail(slug);
+        await loadEvents(1);
+        await loadSlugs(state.slugPage);
+      }
+
+      function readEventFilters() {
+        var limit = clamp(toInt(document.getElementById("q-limit").value, state.eventPageSize || 100), 1, 500);
+        var page = clamp(toInt(document.getElementById("q-page").value, state.eventPage || 1), 1, 999999);
+
+        return {
+          limit: limit,
+          page: page,
+          slug: document.getElementById("q-slug").value.trim(),
+          type: document.getElementById("q-type").value.trim(),
+          side: document.getElementById("q-side").value.trim()
+        };
+      }
+
+      function renderEventRows(items) {
+        var tbody = document.getElementById("rows");
+        if (!Array.isArray(items) || !items.length) {
+          tbody.innerHTML = "<tr><td colspan=\"10\" class=\"empty-cell\">暂无数据</td></tr>";
+          return;
+        }
+
+        var html = items.map(function (e) {
+          var eventTime = e.timestamp_ms ? fmtMS(e.timestamp_ms) : fmtTime(e.event_time);
+          return "<tr>" +
+            "<td>" + escapeHTML(eventTime) + "</td>" +
+            "<td>" + escapeHTML(e.activity_type || "-") + "</td>" +
+            "<td>" + escapeHTML(e.side || "-") + "</td>" +
+            "<td>" + escapeHTML(e.slug || "-") + "</td>" +
+            "<td>" + escapeHTML(e.outcome || "-") + "</td>" +
+            "<td>" + escapeHTML(e.price || "-") + "</td>" +
+            "<td>" + escapeHTML(e.usdc_size || "-") + "</td>" +
+            "<td>" + escapeHTML(e.size || "-") + "</td>" +
+            "<td><code>" + escapeHTML(shortTx(e.transaction_hash)) + "</code></td>" +
+            "<td>" + escapeHTML(String(e.source_offset || 0) + "/" + String(e.source_index || 0)) + "</td>" +
+            "</tr>";
+        }).join("");
+
+        tbody.innerHTML = html;
+      }
+
+      function renderEventPager(data) {
+        var page = Number(data.page || 1);
+        var pages = Number(data.total_pages || 0);
+        var total = Number(data.total || 0);
+
+        if (!Number.isFinite(page) || page <= 0) page = 1;
+        if (!Number.isFinite(pages) || pages < 0) pages = 0;
+
+        state.eventPage = page;
+        state.eventTotalPages = pages;
+
+        document.getElementById("q-page").value = String(page);
+        document.getElementById("events-page-meta").textContent = "第 " + page + " / " + Math.max(1, pages) + " 页，共 " + total + " 条";
+        document.getElementById("btn-events-prev").disabled = page <= 1;
+        document.getElementById("btn-events-next").disabled = pages <= 0 || page >= pages;
+      }
+
+      async function loadEvents(pageOverride) {
+        var f = readEventFilters();
+        if (pageOverride != null) {
+          f.page = clamp(toInt(pageOverride, 1), 1, 999999);
+        }
+
+        state.eventPageSize = f.limit;
+
+        var params = new URLSearchParams();
+        params.set("limit", String(f.limit));
+        params.set("page", String(f.page));
+        if (f.slug) params.set("slug", f.slug);
+        if (f.type) params.set("type", f.type);
+        if (f.side) params.set("side", f.side);
+
+        var endpoint = "/api/v1/events?" + params.toString();
+        document.getElementById("query-meta").textContent = "query: " + endpoint;
+
+        try {
+          var data = await request(endpoint);
+          renderEventRows(data.items || []);
+          renderEventPager(data);
+        } catch (err) {
+          showNotice("事件查询失败: " + err.message, true);
+        }
+      }
+
       function resetAutoRefresh() {
         if (timer) {
           clearInterval(timer);
@@ -493,16 +1552,13 @@ const dashboardHTML = `<!doctype html>
         if (autoRefreshBox.checked) {
           timer = setInterval(function () {
             loadStatus();
-            loadEvents();
+            loadSlugs(state.slugPage || 1);
           }, 10000);
         }
       }
 
       document.getElementById("btn-refresh-status").addEventListener("click", function () {
         loadStatus();
-      });
-      document.getElementById("btn-query").addEventListener("click", function () {
-        loadEvents();
       });
       document.getElementById("btn-sync-fast").addEventListener("click", function () {
         triggerSync("fast");
@@ -512,8 +1568,60 @@ const dashboardHTML = `<!doctype html>
       });
       autoRefreshBox.addEventListener("change", resetAutoRefresh);
 
+      document.getElementById("btn-slug-search").addEventListener("click", function () {
+        loadSlugs(1);
+      });
+      document.getElementById("btn-slug-prev").addEventListener("click", function () {
+        loadSlugs(Math.max(1, (state.slugPage || 1) - 1));
+      });
+      document.getElementById("btn-slug-next").addEventListener("click", function () {
+        loadSlugs((state.slugPage || 1) + 1);
+      });
+      document.getElementById("slug-keyword").addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          loadSlugs(1);
+        }
+      });
+
+      document.getElementById("slug-rows").addEventListener("click", function (ev) {
+        var btn = ev.target.closest(".btn-open-slug");
+        if (!btn) return;
+        var slug = decodeURIComponent(btn.getAttribute("data-slug") || "");
+        if (!slug) return;
+        selectSlug(slug);
+      });
+
+      document.getElementById("detail-refresh").addEventListener("click", function () {
+        if (!state.selectedSlug) {
+          showNotice("请先在左侧选择一个 slug", true);
+          return;
+        }
+        loadSlugDetail(state.selectedSlug);
+      });
+
+      document.getElementById("btn-query").addEventListener("click", function () {
+        loadEvents(readEventFilters().page);
+      });
+      document.getElementById("btn-events-prev").addEventListener("click", function () {
+        loadEvents(Math.max(1, (state.eventPage || 1) - 1));
+      });
+      document.getElementById("btn-events-next").addEventListener("click", function () {
+        loadEvents((state.eventPage || 1) + 1);
+      });
+      document.getElementById("btn-query-reset").addEventListener("click", function () {
+        document.getElementById("q-type").value = "";
+        document.getElementById("q-side").value = "";
+        if (!state.selectedSlug) {
+          document.getElementById("q-slug").value = "";
+        }
+        document.getElementById("q-page").value = "1";
+        loadEvents(1);
+      });
+
       loadStatus();
-      loadEvents();
+      loadSlugs(1);
+      loadEvents(1);
       resetAutoRefresh();
     })();
   </script>
