@@ -13,7 +13,7 @@ import (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
-	cfg, err := loadConfigFromEnv()
+	cfg, err := loadConfig()
 	if err != nil {
 		panic(err)
 	}

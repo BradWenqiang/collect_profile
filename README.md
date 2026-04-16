@@ -58,31 +58,23 @@
 4. `POST /api/v1/sync/once`：手动触发（`mode=fast|backfill`）
 5. `GET /api/v1/events`：查询最近明细（支持 `limit/offset/slug/type/side`）
 
-## 环境变量
+## 运行配置（写死代码）
 
-必填：
+当前版本不读取环境变量，配置直接写死在 `config.go` 的 `loadConfig()` 里。
 
-1. `PM_ACTIVITY_USER`（目标地址）
-2. `PM_ACTIVITY_MYSQL_DSN`
+核心固定值：
 
-常用可选：
-
-1. `PM_ACTIVITY_LISTEN_ADDR`，默认 `:18202`
-2. `PM_ACTIVITY_PAGE_LIMIT`，默认 `1000`（会被限制到 <=1000）
-3. `PM_ACTIVITY_FAST_INTERVAL_SEC`，默认 `30`
-4. `PM_ACTIVITY_BACKFILL_INTERVAL_SEC`，默认 `300`
-5. `PM_ACTIVITY_BACKFILL_OFFSETS`，默认 `0,1000,2000,3000`
-6. `PM_ACTIVITY_REQUEST_GAP_MS`，默认 `800`
-7. `PM_ACTIVITY_FETCH_RETRY`，默认 `3`
+1. `listen_addr`: `:18202`
+2. `target_user`: `0x89b5cdaaa4866c1e738406712012a630b4078beb`
+3. `mysql_dsn`: `root:root@tcp(127.0.0.1:3306)/pm?charset=utf8mb4&parseTime=true&loc=Local`
+4. `page_limit`: `1000`
+5. `fast_interval`: `30s`
+6. `backfill_interval`: `300s`
+7. `backfill_offsets`: `0,1000,2000,3000`
 
 ## 启动示例
 
 ```bash
 cd collect_profile
-cp .env.example .env
-
-export PM_ACTIVITY_USER=0x89b5cdaaa4866c1e738406712012a630b4078beb
-export PM_ACTIVITY_MYSQL_DSN='user:pass@tcp(127.0.0.1:3306)/pm?charset=utf8mb4&parseTime=true&loc=Local'
-
 go run .
 ```
