@@ -73,6 +73,13 @@ type SlugSummary struct {
 	DownCount        int64  `json:"down_count"`
 }
 
+type StrategyGroupQuery struct {
+	Symbol   string
+	StartSec int64
+	EndSec   int64
+	Limit    int
+}
+
 func NewMySQLStore(dsn string, maxIdle, maxOpen int, maxLife time.Duration) (*MySQLStore, error) {
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -334,6 +341,93 @@ func (s *MySQLStore) QuerySlugSummaries(ctx context.Context, q SlugSummaryQuery)
 		return nil, 0, fmt.Errorf("iterate slug summaries failed: %w", err)
 	}
 	return items, total, nil
+}
+
+func (s *MySQLStore) QueryEventsByStrategyGroup(ctx context.Context, q StrategyGroupQuery) ([]ActivityEvent, error) {
+	q.Symbol = strings.ToLower(strings.TrimSpace(q.Symbol))
+	if q.Symbol == "" {
+		return nil, fmt.Errorf("empty symbol")
+	}
+	if q.EndSec <= q.StartSec {
+		return nil, fmt.Errorf("invalid window: start=%d end=%d", q.StartSec, q.EndSec)
+	}
+	if q.Limit <= 0 {
+		q.Limit = 4000
+	}
+	if q.Limit > 10000 {
+		q.Limit = 10000
+	}
+
+	querySQL := "SELECT event_id,user_wallet,proxy_wallet,timestamp_ms,event_time,condition_id,activity_type,size,usdc_size,transaction_hash,price,asset,side,outcome_index,title,slug,event_slug,outcome,raw_json,source_offset,source_index,pulled_at " +
+		"FROM pm_activity_events WHERE slug <> '' " +
+		"AND LOWER(SUBSTRING_INDEX(slug, '-', 1)) = ? " +
+		"AND (slug LIKE '%-5m-%' OR slug LIKE '%-15m-%') " +
+		"AND CAST(SUBSTRING_INDEX(slug, '-', -1) AS UNSIGNED) > ? " +
+		"AND CAST(SUBSTRING_INDEX(slug, '-', -1) AS UNSIGNED) <= ? " +
+		"ORDER BY timestamp_ms DESC, id DESC LIMIT ?"
+
+	rows, err := s.db.QueryContext(ctx, querySQL, q.Symbol, q.StartSec, q.EndSec, q.Limit)
+	if err != nil {
+		return nil, fmt.Errorf("query strategy group events failed: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]ActivityEvent, 0, q.Limit)
+	for rows.Next() {
+		var e ActivityEvent
+		var eventTime sql.NullTime
+		var size sql.NullString
+		var usdcSize sql.NullString
+		var price sql.NullString
+		var outcomeIndex sql.NullInt64
+		if err = rows.Scan(
+			&e.EventID,
+			&e.UserWallet,
+			&e.ProxyWallet,
+			&e.TimestampMs,
+			&eventTime,
+			&e.ConditionID,
+			&e.ActivityType,
+			&size,
+			&usdcSize,
+			&e.TransactionHash,
+			&price,
+			&e.Asset,
+			&e.Side,
+			&outcomeIndex,
+			&e.Title,
+			&e.Slug,
+			&e.EventSlug,
+			&e.Outcome,
+			&e.RawJSON,
+			&e.SourceOffset,
+			&e.SourceIndex,
+			&e.PulledAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan strategy group event failed: %w", err)
+		}
+		if eventTime.Valid {
+			e.EventTime = eventTime.Time.UTC()
+		}
+		if size.Valid {
+			e.Size = size.String
+		}
+		if usdcSize.Valid {
+			e.USDCSize = usdcSize.String
+		}
+		if price.Valid {
+			e.Price = price.String
+		}
+		if outcomeIndex.Valid {
+			tmp := int(outcomeIndex.Int64)
+			e.OutcomeIndex = &tmp
+		}
+		out = append(out, e)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate strategy group events failed: %w", err)
+	}
+	return out, nil
 }
 
 func buildEventQueryBase(selectClause string, q EventQuery) (string, []interface{}) {

@@ -46,6 +46,7 @@ type ActivityEvent struct {
 
 func parseActivityEvent(raw RawActivity, userWallet string, sourceOffset, sourceIndex int, pulledAt time.Time) (ActivityEvent, error) {
 	ts, _ := extractInt64(raw["timestamp"])
+	ts = normalizeUnixTimestampMs(ts)
 	eventTime := time.Time{}
 	if ts > 0 {
 		eventTime = time.UnixMilli(ts).UTC()
@@ -54,33 +55,44 @@ func parseActivityEvent(raw RawActivity, userWallet string, sourceOffset, source
 	rawJSON := canonicalJSON(raw)
 
 	e := ActivityEvent{
-		EventID:          buildEventID(userWallet, rawJSON),
-		UserWallet:       strings.ToLower(strings.TrimSpace(userWallet)),
-		ProxyWallet:      strings.ToLower(strings.TrimSpace(extractString(raw["proxyWallet"]))),
-		TimestampMs:      ts,
-		EventTime:        eventTime,
-		ConditionID:      strings.TrimSpace(extractString(raw["conditionId"])),
-		ActivityType:     strings.ToUpper(strings.TrimSpace(extractString(raw["type"]))),
-		Size:             normalizeNumberString(raw["size"]),
-		USDCSize:         normalizeNumberString(raw["usdcSize"]),
-		TransactionHash:  strings.ToLower(strings.TrimSpace(extractString(raw["transactionHash"]))),
-		Price:            normalizeNumberString(raw["price"]),
-		Asset:            strings.ToLower(strings.TrimSpace(extractString(raw["asset"]))),
-		Side:             strings.ToLower(strings.TrimSpace(extractString(raw["side"]))),
-		OutcomeIndex:     outcomeIndex,
-		Title:            strings.TrimSpace(extractString(raw["title"])),
-		Slug:             strings.TrimSpace(extractString(raw["slug"])),
-		EventSlug:        strings.TrimSpace(extractString(raw["eventSlug"])),
-		Outcome:          strings.TrimSpace(extractString(raw["outcome"])),
-		RawJSON:          rawJSON,
-		SourceOffset:     sourceOffset,
-		SourceIndex:      sourceIndex,
-		PulledAt:         pulledAt.UTC(),
+		EventID:         buildEventID(userWallet, rawJSON),
+		UserWallet:      strings.ToLower(strings.TrimSpace(userWallet)),
+		ProxyWallet:     strings.ToLower(strings.TrimSpace(extractString(raw["proxyWallet"]))),
+		TimestampMs:     ts,
+		EventTime:       eventTime,
+		ConditionID:     strings.TrimSpace(extractString(raw["conditionId"])),
+		ActivityType:    strings.ToUpper(strings.TrimSpace(extractString(raw["type"]))),
+		Size:            normalizeNumberString(raw["size"]),
+		USDCSize:        normalizeNumberString(raw["usdcSize"]),
+		TransactionHash: strings.ToLower(strings.TrimSpace(extractString(raw["transactionHash"]))),
+		Price:           normalizeNumberString(raw["price"]),
+		Asset:           strings.ToLower(strings.TrimSpace(extractString(raw["asset"]))),
+		Side:            strings.ToLower(strings.TrimSpace(extractString(raw["side"]))),
+		OutcomeIndex:    outcomeIndex,
+		Title:           strings.TrimSpace(extractString(raw["title"])),
+		Slug:            strings.TrimSpace(extractString(raw["slug"])),
+		EventSlug:       strings.TrimSpace(extractString(raw["eventSlug"])),
+		Outcome:         strings.TrimSpace(extractString(raw["outcome"])),
+		RawJSON:         rawJSON,
+		SourceOffset:    sourceOffset,
+		SourceIndex:     sourceIndex,
+		PulledAt:        pulledAt.UTC(),
 	}
 	if e.EventID == "" {
 		return ActivityEvent{}, fmt.Errorf("empty event id")
 	}
 	return e, nil
+}
+
+func normalizeUnixTimestampMs(ts int64) int64 {
+	if ts <= 0 {
+		return ts
+	}
+	// API may return either seconds or milliseconds. Normalize to milliseconds.
+	if ts < 1_000_000_000_000 {
+		return ts * 1000
+	}
+	return ts
 }
 
 func buildEventID(userWallet, canonical string) string {

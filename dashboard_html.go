@@ -461,6 +461,29 @@ const dashboardHTML = `<!doctype html>
       font-family: "JetBrains Mono", Menlo, monospace;
     }
 
+    .pager-meta-line {
+      margin-top: 4px;
+    }
+
+    .slug-table {
+      min-width: 0;
+    }
+
+    .slug-table th:first-child,
+    .slug-table td:first-child {
+      width: 260px;
+      max-width: 260px;
+    }
+
+    .slug-table td:first-child code {
+      display: inline-block;
+      max-width: 248px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: top;
+    }
+
     @keyframes rise {
       from {
         opacity: .4;
@@ -569,10 +592,10 @@ const dashboardHTML = `<!doctype html>
         <div class="pager">
           <button class="btn-light" id="btn-slug-prev" style="width:auto;">上一页</button>
           <button class="btn-light" id="btn-slug-next" style="width:auto;">下一页</button>
-          <span class="meta" id="slug-page-meta">-</span>
         </div>
+        <div class="pager-meta-line"><span class="meta" id="slug-page-meta">-</span></div>
         <div class="table-wrap">
-          <table>
+          <table class="slug-table">
             <thead>
               <tr>
                 <th>slug</th>
@@ -607,6 +630,7 @@ const dashboardHTML = `<!doctype html>
         </div>
 
         <div class="mono" id="detail-note">请选择左侧 slug，系统会自动按比赛聚合并做分析。</div>
+        <div class="mono" id="detail-group-meta">分组: -</div>
         <div class="kpi-grid" id="detail-kpis"></div>
 
         <div class="analysis-box" id="detail-summary">
@@ -760,8 +784,8 @@ const dashboardHTML = `<!doctype html>
         <button class="btn-light" id="btn-events-prev" style="width:auto;">上一页</button>
         <button class="btn-light" id="btn-events-next" style="width:auto;">下一页</button>
         <button class="btn-light" id="btn-query-reset" style="width:auto;">重置过滤</button>
-        <span class="meta" id="events-page-meta">-</span>
       </div>
+      <div class="pager-meta-line"><span class="meta" id="events-page-meta">-</span></div>
       <div class="mono" id="query-meta">query: /api/v1/events</div>
 
       <div class="table-wrap">
@@ -801,6 +825,7 @@ const dashboardHTML = `<!doctype html>
         slugPageSize: 12,
         slugKeyword: "",
         selectedSlug: "",
+        selectedStrategy: null,
         eventPage: 1,
         eventTotalPages: 0,
         eventPageSize: 100
@@ -840,8 +865,15 @@ const dashboardHTML = `<!doctype html>
         return d.toLocaleString();
       }
 
+      function normalizeEpochMs(v) {
+        var ts = Number(v || 0);
+        if (!Number.isFinite(ts) || ts <= 0) return 0;
+        if (ts < 1000000000000) return ts * 1000;
+        return ts;
+      }
+
       function fmtMS(ms) {
-        var v = Number(ms || 0);
+        var v = normalizeEpochMs(ms);
         if (!v || v <= 0) return "-";
         var d = new Date(v);
         if (isNaN(d.getTime())) return "-";
@@ -850,8 +882,16 @@ const dashboardHTML = `<!doctype html>
 
       function fmtNum(v, digits) {
         if (!Number.isFinite(v)) return "-";
-        var d = Number.isFinite(digits) ? digits : 4;
+        var d = Number.isFinite(digits) ? digits : 2;
         return Number(v).toFixed(d);
+      }
+
+      function fmtNumFromRaw(raw) {
+        var s = String(raw == null ? "" : raw).trim();
+        if (!s) return "-";
+        var n = Number(s);
+        if (!Number.isFinite(n)) return s;
+        return fmtNum(n, 2);
       }
 
       function shortTx(tx) {
@@ -878,8 +918,63 @@ const dashboardHTML = `<!doctype html>
         return body.data;
       }
 
+      function parseStrategyGroupBySlug(slug) {
+        var text = String(slug || "").trim().toLowerCase();
+        if (!text) return null;
+        var parts = text.split("-");
+        if (parts.length < 2) return null;
+
+        var symbol = parts[0].replace(/[^a-z0-9]/g, "");
+        if (!symbol) return null;
+
+        var closeSec = parseInt(parts[parts.length - 1], 10);
+        if (!Number.isFinite(closeSec) || closeSec <= 0) return null;
+
+        var closeMs = normalizeEpochMs(closeSec);
+        var closeSecNorm = Math.floor(closeMs / 1000);
+        var startSec = Math.floor((closeSecNorm - 1) / 900) * 900;
+        var endSec = startSec + 900;
+
+        return {
+          symbol: symbol,
+          startSec: startSec,
+          endSec: endSec
+        };
+      }
+
+      function fmtTimeRangeSec(startSec, endSec) {
+        if (!startSec || !endSec || endSec <= startSec) return "-";
+        var start = new Date(startSec * 1000);
+        var end = new Date(endSec * 1000);
+        return start.toLocaleString() + " ~ " + end.toLocaleTimeString();
+      }
+
+      async function fetchEventsByStrategyGroup(strategy) {
+        var params = new URLSearchParams();
+        params.set("symbol", strategy.symbol);
+        params.set("start_sec", String(strategy.startSec));
+        params.set("end_sec", String(strategy.endSec));
+        params.set("limit", "5000");
+
+        var data = await request("/api/v1/events/strategy-group?" + params.toString());
+        var items = Array.isArray(data.items) ? data.items : [];
+        var slugMap = {};
+        var i;
+        for (i = 0; i < items.length; i++) {
+          var s = String(items[i].slug || "").trim();
+          if (s) slugMap[s] = true;
+        }
+        return {
+          items: items,
+          total: Number(data.count || items.length),
+          truncated: false,
+          strategy: strategy,
+          slugs: Object.keys(slugMap).sort()
+        };
+      }
+
       function getEventTimestampMs(e) {
-        var ts = Number(e && e.timestamp_ms);
+        var ts = normalizeEpochMs(e && e.timestamp_ms);
         if (Number.isFinite(ts) && ts > 0) return ts;
         if (e && e.event_time) {
           var d = new Date(e.event_time);
@@ -1318,7 +1413,8 @@ const dashboardHTML = `<!doctype html>
         return {
           items: all,
           total: total,
-          truncated: all.length < total
+          truncated: all.length < total,
+          slugs: slug ? [slug] : []
         };
       }
 
@@ -1337,9 +1433,9 @@ const dashboardHTML = `<!doctype html>
         var html = show.map(function (r) {
           return "<tr>" +
             "<td>" + escapeHTML(fmtMS(r.ts)) + "</td>" +
-            "<td>" + escapeHTML(fmtNum(r.price, 4)) + "</td>" +
-            "<td>" + escapeHTML(fmtNum(r.qty, 4)) + "</td>" +
-            "<td>" + escapeHTML(fmtNum(r.usdc, 4)) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(r.price, 2)) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(r.qty, 2)) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(r.usdc, 2)) + "</td>" +
             "<td>" + escapeHTML(String((r.raw && r.raw.outcome) || "-")) + "</td>" +
             "<td><code>" + escapeHTML(shortTx(r.raw && r.raw.transaction_hash)) + "</code></td>" +
             "</tr>";
@@ -1368,16 +1464,16 @@ const dashboardHTML = `<!doctype html>
             "<td>" + escapeHTML(String(w.records)) + "</td>" +
             "<td>" + escapeHTML(w.orderHint) + "</td>" +
             "<td>" + escapeHTML(w.firstCombo + " -> " + w.lastCombo) + "</td>" +
-            "<td>" + escapeHTML(fmtNum(w.buyPnl, 6)) + "</td>" +
-            "<td>" + escapeHTML(fmtNum(w.sellPnl, 6)) + "</td>" +
-            "<td>" + escapeHTML(fmtNum(w.totalPnl, 6)) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(w.buyPnl, 2)) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(w.sellPnl, 2)) + "</td>" +
+            "<td>" + escapeHTML(fmtNum(w.totalPnl, 2)) + "</td>" +
             "</tr>";
         }).join("");
 
         tbody.innerHTML = html;
       }
 
-      function renderDetail(slug, fetched, analyzed) {
+      function renderDetail(slug, fetched, analyzed, strategyInfo) {
         document.getElementById("detail-slug").value = slug || "";
 
         var totalRecords = fetched.items.length;
@@ -1395,8 +1491,8 @@ const dashboardHTML = `<!doctype html>
 
         var kpis = [
           { k: "总记录", v: String(totalRecords), c: "" },
-          { k: "可配对数量", v: fmtNum(analyzed.totalPairedQty, 4), c: "" },
-          { k: "估算总盈亏", v: fmtNum(analyzed.totalPnl, 6), c: pnlClass },
+          { k: "可配对数量", v: fmtNum(analyzed.totalPairedQty, 2), c: "" },
+          { k: "估算总盈亏", v: fmtNum(analyzed.totalPnl, 2), c: pnlClass },
           { k: "平均对称度", v: fmtNum(combinedSymmetry * 100, 2) + "%", c: symmetryClass }
         ];
 
@@ -1409,8 +1505,8 @@ const dashboardHTML = `<!doctype html>
 
         var lines = [];
         lines.push("结论: " + analyzed.verdict + "；" + analyzed.riskText);
-        lines.push("Buy 配对公式: (1 - (up_price + down_price)) * 配对数量。当前配对数量=" + fmtNum(buy.pairedQty, 4) + "，估算=" + fmtNum(buy.pairedPnl, 6) + "，对称度=" + fmtNum(buy.symmetryRate * 100, 2) + "%");
-        lines.push("Sell 配对公式: ((up_price + down_price) - 1) * 配对数量。当前配对数量=" + fmtNum(sell.pairedQty, 4) + "，估算=" + fmtNum(sell.pairedPnl, 6) + "，对称度=" + fmtNum(sell.symmetryRate * 100, 2) + "%");
+        lines.push("Buy 配对公式: (1 - (up_price + down_price)) * 配对数量。当前配对数量=" + fmtNum(buy.pairedQty, 2) + "，估算=" + fmtNum(buy.pairedPnl, 2) + "，对称度=" + fmtNum(buy.symmetryRate * 100, 2) + "%");
+        lines.push("Sell 配对公式: ((up_price + down_price) - 1) * 配对数量。当前配对数量=" + fmtNum(sell.pairedQty, 2) + "，估算=" + fmtNum(sell.pairedPnl, 2) + "，对称度=" + fmtNum(sell.symmetryRate * 100, 2) + "%");
         lines.push("示例: 如果 buy-up=0.05 且 buy-down=0.92，则 1-(0.05+0.92)=0.03，理论上这对是赚钱的（前提是数量可配对）。");
         lines.push("未知方向记录: " + analyzed.unknown.length + " 条（outcome 无法识别为 up/down 时计入）。");
 
@@ -1420,6 +1516,15 @@ const dashboardHTML = `<!doctype html>
 
         var truncatedText = fetched.truncated ? "注意: 当前只分析了前 " + fetched.items.length + " 条，库内总量约 " + fetched.total + " 条（已触发保护上限）。" : "分析覆盖记录: " + fetched.items.length + " / " + fetched.total;
         document.getElementById("detail-note").textContent = truncatedText;
+
+        var groupText = "分组: 单场 slug";
+        if (strategyInfo) {
+          groupText = "分组: " + strategyInfo.symbol.toUpperCase() + " | " + fmtTimeRangeSec(strategyInfo.startSec, strategyInfo.endSec);
+        }
+        if (Array.isArray(fetched.slugs) && fetched.slugs.length) {
+          groupText += " | 本组盘口: " + fetched.slugs.join(", ");
+        }
+        document.getElementById("detail-group-meta").textContent = groupText;
 
         renderComboBody("combo-buy-up", analyzed.buckets.buy_up);
         renderComboBody("combo-buy-down", analyzed.buckets.buy_down);
@@ -1437,17 +1542,27 @@ const dashboardHTML = `<!doctype html>
       async function loadSlugDetail(slug) {
         if (!slug) return;
 
+        var strategyInfo = parseStrategyGroupBySlug(slug);
+        state.selectedStrategy = strategyInfo;
+
         document.getElementById("detail-slug").value = slug;
         document.getElementById("detail-note").textContent = "正在加载比赛数据并分析...";
         document.getElementById("detail-summary").innerHTML = "<div class=\"line\">加载中...</div>";
+        document.getElementById("detail-group-meta").textContent = "分组: 计算中...";
 
         try {
-          var fetched = await fetchAllEventsBySlug(slug);
+          var fetched = null;
+          if (strategyInfo) {
+            fetched = await fetchEventsByStrategyGroup(strategyInfo);
+          } else {
+            fetched = await fetchAllEventsBySlug(slug);
+          }
           var waveGapSec = clamp(toInt(document.getElementById("detail-wave-gap").value, 120), 10, 900);
           var analyzed = analyzeSlugEvents(fetched.items, waveGapSec);
-          renderDetail(slug, fetched, analyzed);
+          renderDetail(slug, fetched, analyzed, strategyInfo);
         } catch (err) {
           document.getElementById("detail-note").textContent = "分析失败";
+          document.getElementById("detail-group-meta").textContent = "分组: -";
           showNotice("加载比赛详情失败: " + err.message, true);
         }
       }
@@ -1489,9 +1604,9 @@ const dashboardHTML = `<!doctype html>
             "<td>" + escapeHTML(e.side || "-") + "</td>" +
             "<td>" + escapeHTML(e.slug || "-") + "</td>" +
             "<td>" + escapeHTML(e.outcome || "-") + "</td>" +
-            "<td>" + escapeHTML(e.price || "-") + "</td>" +
-            "<td>" + escapeHTML(e.usdc_size || "-") + "</td>" +
-            "<td>" + escapeHTML(e.size || "-") + "</td>" +
+            "<td>" + escapeHTML(fmtNumFromRaw(e.price)) + "</td>" +
+            "<td>" + escapeHTML(fmtNumFromRaw(e.usdc_size)) + "</td>" +
+            "<td>" + escapeHTML(fmtNumFromRaw(e.size)) + "</td>" +
             "<td><code>" + escapeHTML(shortTx(e.transaction_hash)) + "</code></td>" +
             "<td>" + escapeHTML(String(e.source_offset || 0) + "/" + String(e.source_index || 0)) + "</td>" +
             "</tr>";

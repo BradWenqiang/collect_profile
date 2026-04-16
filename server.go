@@ -121,6 +121,40 @@ func NewHTTPServer(cfg *Config, poller *Poller, store *MySQLStore) *server.Hertz
 		})
 	})
 
+	h.GET("/api/v1/events/strategy-group", func(ctx context.Context, c *app.RequestContext) {
+		symbol := strings.TrimSpace(c.Query("symbol"))
+		startSec := parsePositiveInt64(c.Query("start_sec"), 0)
+		endSec := parsePositiveInt64(c.Query("end_sec"), 0)
+		limit := parsePositiveInt(c.Query("limit"), 4000)
+		if symbol == "" {
+			writeErr(c, http.StatusBadRequest, "symbol is required")
+			return
+		}
+		if startSec <= 0 || endSec <= startSec {
+			writeErr(c, http.StatusBadRequest, "start_sec/end_sec is invalid")
+			return
+		}
+
+		rows, err := store.QueryEventsByStrategyGroup(ctx, StrategyGroupQuery{
+			Symbol:   symbol,
+			StartSec: startSec,
+			EndSec:   endSec,
+			Limit:    limit,
+		})
+		if err != nil {
+			writeErr(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		writeOK(c, map[string]interface{}{
+			"symbol":    strings.ToLower(symbol),
+			"start_sec": startSec,
+			"end_sec":   endSec,
+			"items":     rows,
+			"count":     len(rows),
+		})
+	})
+
 	h.GET("/api/v1/slugs", func(ctx context.Context, c *app.RequestContext) {
 		pageSize := parsePositiveInt(c.Query("page_size"), 12)
 		if pageSize <= 0 {
@@ -165,6 +199,18 @@ func parsePositiveInt(raw string, fallback int) int {
 		return fallback
 	}
 	v, err := strconv.Atoi(raw)
+	if err != nil || v < 0 {
+		return fallback
+	}
+	return v
+}
+
+func parsePositiveInt64(raw string, fallback int64) int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || v < 0 {
 		return fallback
 	}
