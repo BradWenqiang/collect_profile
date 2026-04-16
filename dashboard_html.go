@@ -267,7 +267,7 @@ const dashboardHTML = `<!doctype html>
 
     .toolbar {
       display: grid;
-      grid-template-columns: 1.2fr .8fr auto;
+      grid-template-columns: 1.2fr .8fr .8fr auto;
       gap: 8px;
       margin-top: 8px;
       align-items: end;
@@ -342,6 +342,16 @@ const dashboardHTML = `<!doctype html>
 
     .row-selected {
       background: #f3faf5;
+    }
+
+    .tag-group-row td {
+      background: #edf5ea;
+      color: #2d5a42;
+      font-weight: 700;
+      letter-spacing: .01em;
+      text-transform: uppercase;
+      font-size: 11px;
+      border-top: 1px solid #d7e5cf;
     }
 
     .kpi-grid {
@@ -573,8 +583,7 @@ const dashboardHTML = `<!doctype html>
       <div class="notice" id="notice"></div>
     </section>
 
-    <section class="split">
-      <section class="panel">
+    <section class="panel">
         <h2>比赛列表（按 slug 分页）</h2>
         <div class="toolbar">
           <div>
@@ -584,6 +593,16 @@ const dashboardHTML = `<!doctype html>
           <div>
             <label for="slug-page-size">每页</label>
             <input id="slug-page-size" type="number" min="1" max="100" value="12" />
+          </div>
+          <div>
+            <label for="slug-tag">Tag</label>
+            <select id="slug-tag">
+              <option value="all">全部</option>
+              <option value="btc">BTC</option>
+              <option value="eth">ETH</option>
+              <option value="sol">SOL</option>
+              <option value="other">OTHER</option>
+            </select>
           </div>
           <div style="display:flex;align-items:flex-end;">
             <button class="btn-primary" id="btn-slug-search">查询比赛</button>
@@ -599,6 +618,7 @@ const dashboardHTML = `<!doctype html>
             <thead>
               <tr>
                 <th>slug</th>
+                <th>tag</th>
                 <th>events</th>
                 <th>buy/sell</th>
                 <th>up/down</th>
@@ -607,13 +627,13 @@ const dashboardHTML = `<!doctype html>
               </tr>
             </thead>
             <tbody id="slug-rows">
-              <tr><td colspan="6" class="empty-cell">加载中...</td></tr>
+              <tr><td colspan="7" class="empty-cell">加载中...</td></tr>
             </tbody>
           </table>
         </div>
-      </section>
+    </section>
 
-      <section class="panel">
+    <section class="panel">
         <h2>比赛展开分析</h2>
         <div class="toolbar-2">
           <div>
@@ -749,7 +769,6 @@ const dashboardHTML = `<!doctype html>
             </tbody>
           </table>
         </div>
-      </section>
     </section>
 
     <section class="panel">
@@ -824,6 +843,7 @@ const dashboardHTML = `<!doctype html>
         slugTotalPages: 0,
         slugPageSize: 12,
         slugKeyword: "",
+        slugTag: "all",
         selectedSlug: "",
         selectedStrategy: null,
         eventPage: 1,
@@ -918,13 +938,16 @@ const dashboardHTML = `<!doctype html>
         return body.data;
       }
 
-      function parseStrategyGroupBySlug(slug) {
+      function parseStrategyGroupBySlug(slug, fallbackTag) {
         var text = String(slug || "").trim().toLowerCase();
         if (!text) return null;
         var parts = text.split("-");
         if (parts.length < 2) return null;
 
         var symbol = parts[0].replace(/[^a-z0-9]/g, "");
+        if (fallbackTag && fallbackTag !== "all") {
+          symbol = normalizeTag(fallbackTag);
+        }
         if (!symbol) return null;
 
         var closeSec = parseInt(parts[parts.length - 1], 10);
@@ -1321,33 +1344,68 @@ const dashboardHTML = `<!doctype html>
         }
       }
 
+      function normalizeTag(raw) {
+        var t = String(raw || "").trim().toLowerCase();
+        if (!t) return "other";
+        if (t === "btc" || t === "bitcoin") return "btc";
+        if (t === "eth" || t === "ethereum") return "eth";
+        if (t === "sol" || t === "solana") return "sol";
+        return "other";
+      }
+
+      function prettyTag(tag) {
+        var t = normalizeTag(tag);
+        if (t === "btc") return "BTC";
+        if (t === "eth") return "ETH";
+        if (t === "sol") return "SOL";
+        return "OTHER";
+      }
+
       function readSlugFilters() {
         var pageSize = clamp(toInt(document.getElementById("slug-page-size").value, state.slugPageSize || 12), 1, 100);
         state.slugPageSize = pageSize;
         state.slugKeyword = document.getElementById("slug-keyword").value.trim();
+        state.slugTag = String(document.getElementById("slug-tag").value || "all").trim().toLowerCase();
       }
 
       function renderSlugRows(items) {
         var tbody = document.getElementById("slug-rows");
         if (!items || !items.length) {
-          tbody.innerHTML = "<tr><td colspan=\"6\" class=\"empty-cell\">暂无比赛</td></tr>";
+          tbody.innerHTML = "<tr><td colspan=\"7\" class=\"empty-cell\">暂无比赛</td></tr>";
           return;
         }
+        var order = ["btc", "eth", "sol", "other"];
+        var grouped = {};
+        var i;
+        for (i = 0; i < items.length; i++) {
+          var row = items[i];
+          var tag = normalizeTag(row.market_tag);
+          if (!grouped[tag]) grouped[tag] = [];
+          grouped[tag].push(row);
+        }
 
-        var html = items.map(function (s) {
-          var slug = String(s.slug || "");
-          var selected = state.selectedSlug && state.selectedSlug === slug ? "row-selected" : "";
-          var actionSlug = encodeURIComponent(slug);
-          return "<tr class=\"" + selected + "\">" +
-            "<td><code>" + escapeHTML(slug || "-") + "</code></td>" +
-            "<td>" + escapeHTML(String(s.event_count || 0)) + "</td>" +
-            "<td>" + escapeHTML(String(s.buy_count || 0) + " / " + String(s.sell_count || 0)) + "</td>" +
-            "<td>" + escapeHTML(String(s.up_count || 0) + " / " + String(s.down_count || 0)) + "</td>" +
-            "<td>" + escapeHTML(fmtMS(s.last_timestamp_ms || 0)) + "</td>" +
-            "<td><button class=\"btn-link btn-open-slug\" data-slug=\"" + actionSlug + "\">展开</button></td>" +
-            "</tr>";
-        }).join("");
-        tbody.innerHTML = html;
+        var html = "";
+        order.forEach(function (tag) {
+          var rows = grouped[tag] || [];
+          if (!rows.length) return;
+          html += "<tr class=\"tag-group-row\"><td colspan=\"7\">" + escapeHTML(prettyTag(tag)) + " · " + rows.length + " 场</td></tr>";
+          rows.forEach(function (s) {
+            var slug = String(s.slug || "");
+            var selected = state.selectedSlug && state.selectedSlug === slug ? "row-selected" : "";
+            var actionSlug = encodeURIComponent(slug);
+            var actionTag = encodeURIComponent(normalizeTag(s.market_tag));
+            html += "<tr class=\"" + selected + "\">" +
+              "<td><code>" + escapeHTML(slug || "-") + "</code></td>" +
+              "<td>" + escapeHTML(prettyTag(s.market_tag)) + "</td>" +
+              "<td>" + escapeHTML(String(s.event_count || 0)) + "</td>" +
+              "<td>" + escapeHTML(String(s.buy_count || 0) + " / " + String(s.sell_count || 0)) + "</td>" +
+              "<td>" + escapeHTML(String(s.up_count || 0) + " / " + String(s.down_count || 0)) + "</td>" +
+              "<td>" + escapeHTML(fmtMS(s.last_timestamp_ms || 0)) + "</td>" +
+              "<td><button class=\"btn-link btn-open-slug\" data-slug=\"" + actionSlug + "\" data-tag=\"" + actionTag + "\">展开</button></td>" +
+              "</tr>";
+          });
+        });
+        tbody.innerHTML = html || "<tr><td colspan=\"7\" class=\"empty-cell\">暂无比赛</td></tr>";
       }
 
       function renderSlugPager(data) {
@@ -1372,6 +1430,7 @@ const dashboardHTML = `<!doctype html>
         params.set("page", String(targetPage));
         params.set("page_size", String(state.slugPageSize));
         if (state.slugKeyword) params.set("keyword", state.slugKeyword);
+        if (state.slugTag && state.slugTag !== "all") params.set("tag", state.slugTag);
 
         try {
           var data = await request("/api/v1/slugs?" + params.toString());
@@ -1539,10 +1598,10 @@ const dashboardHTML = `<!doctype html>
         renderWaveRows(analyzed.waves);
       }
 
-      async function loadSlugDetail(slug) {
+      async function loadSlugDetail(slug, marketTag) {
         if (!slug) return;
 
-        var strategyInfo = parseStrategyGroupBySlug(slug);
+        var strategyInfo = parseStrategyGroupBySlug(slug, marketTag);
         state.selectedStrategy = strategyInfo;
 
         document.getElementById("detail-slug").value = slug;
@@ -1567,11 +1626,11 @@ const dashboardHTML = `<!doctype html>
         }
       }
 
-      async function selectSlug(slug) {
+      async function selectSlug(slug, marketTag) {
         if (!slug) return;
         state.selectedSlug = slug;
         document.getElementById("q-slug").value = slug;
-        await loadSlugDetail(slug);
+        await loadSlugDetail(slug, marketTag);
         await loadEvents(1);
         await loadSlugs(state.slugPage);
       }
@@ -1698,13 +1757,17 @@ const dashboardHTML = `<!doctype html>
           loadSlugs(1);
         }
       });
+      document.getElementById("slug-tag").addEventListener("change", function () {
+        loadSlugs(1);
+      });
 
       document.getElementById("slug-rows").addEventListener("click", function (ev) {
         var btn = ev.target.closest(".btn-open-slug");
         if (!btn) return;
         var slug = decodeURIComponent(btn.getAttribute("data-slug") || "");
+        var marketTag = decodeURIComponent(btn.getAttribute("data-tag") || "");
         if (!slug) return;
-        selectSlug(slug);
+        selectSlug(slug, marketTag);
       });
 
       document.getElementById("detail-refresh").addEventListener("click", function () {
@@ -1712,7 +1775,7 @@ const dashboardHTML = `<!doctype html>
           showNotice("请先在左侧选择一个 slug", true);
           return;
         }
-        loadSlugDetail(state.selectedSlug);
+        loadSlugDetail(state.selectedSlug, state.selectedStrategy && state.selectedStrategy.symbol);
       });
 
       document.getElementById("btn-query").addEventListener("click", function () {

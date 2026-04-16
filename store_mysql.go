@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS pm_activity_events (
   outcome_index INT NULL,
   title VARCHAR(1024) NOT NULL DEFAULT '',
   slug VARCHAR(255) NOT NULL DEFAULT '',
+  market_tag VARCHAR(24) NOT NULL DEFAULT '',
   event_slug VARCHAR(255) NOT NULL DEFAULT '',
   outcome VARCHAR(128) NOT NULL DEFAULT '',
   source_offset INT NOT NULL DEFAULT 0,
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS pm_activity_events (
   PRIMARY KEY (id),
   UNIQUE KEY uq_event_id (event_id),
   KEY idx_user_ts (user_wallet, timestamp_ms DESC),
+  KEY idx_market_tag_ts (market_tag, timestamp_ms DESC),
   KEY idx_slug_ts (slug, timestamp_ms DESC),
   KEY idx_tx_hash (transaction_hash)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -52,6 +54,7 @@ type EventQuery struct {
 	Limit        int
 	Offset       int
 	Slug         string
+	MarketTag    string
 	ActivityType string
 	Side         string
 }
@@ -60,9 +63,11 @@ type SlugSummaryQuery struct {
 	Limit   int
 	Offset  int
 	Keyword string
+	Tag     string
 }
 
 type SlugSummary struct {
+	MarketTag        string `json:"market_tag"`
 	Slug             string `json:"slug"`
 	EventCount       int64  `json:"event_count"`
 	FirstTimestampMs int64  `json:"first_timestamp_ms"`
@@ -110,6 +115,24 @@ func (s *MySQLStore) EnsureSchema(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create table failed: %w", err)
 	}
+	if err = s.ensureMarketTagSchema(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *MySQLStore) ensureMarketTagSchema(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, "ALTER TABLE pm_activity_events ADD COLUMN market_tag VARCHAR(24) NOT NULL DEFAULT '' AFTER slug"); err != nil {
+		if !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+			return fmt.Errorf("ensure market_tag column failed: %w", err)
+		}
+	}
+	if _, err := s.db.ExecContext(ctx, "ALTER TABLE pm_activity_events ADD INDEX idx_market_tag_ts (market_tag, timestamp_ms DESC)"); err != nil {
+		msg := strings.ToLower(err.Error())
+		if !strings.Contains(msg, "duplicate key name") && !strings.Contains(msg, "already exists") {
+			return fmt.Errorf("ensure market_tag index failed: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -137,12 +160,12 @@ func (s *MySQLStore) insertBatchOnce(ctx context.Context, events []ActivityEvent
 	if len(events) == 0 {
 		return 0, nil
 	}
-	valueSQL := "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+	valueSQL := "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
 	sqlBuilder := strings.Builder{}
 	sqlBuilder.WriteString("INSERT IGNORE INTO pm_activity_events (")
-	sqlBuilder.WriteString("event_id,user_wallet,proxy_wallet,timestamp_ms,event_time,condition_id,activity_type,size,usdc_size,transaction_hash,price,asset,side,outcome_index,title,slug,event_slug,outcome,source_offset,source_index,pulled_at,raw_json,created_at")
+	sqlBuilder.WriteString("event_id,user_wallet,proxy_wallet,timestamp_ms,event_time,condition_id,activity_type,size,usdc_size,transaction_hash,price,asset,side,outcome_index,title,slug,market_tag,event_slug,outcome,source_offset,source_index,pulled_at,raw_json,created_at")
 	sqlBuilder.WriteString(") VALUES ")
-	args := make([]interface{}, 0, len(events)*23)
+	args := make([]interface{}, 0, len(events)*24)
 	now := time.Now().UTC()
 	for i := range events {
 		if i > 0 {
@@ -167,6 +190,7 @@ func (s *MySQLStore) insertBatchOnce(ctx context.Context, events []ActivityEvent
 			nullableInt(e.OutcomeIndex),
 			e.Title,
 			e.Slug,
+			normalizeMarketTag(e.MarketTag),
 			e.EventSlug,
 			e.Outcome,
 			e.SourceOffset,
@@ -214,7 +238,7 @@ func (s *MySQLStore) QueryEvents(ctx context.Context, q EventQuery) ([]ActivityE
 		q.Offset = 0
 	}
 
-	sqlText, args := buildEventQueryBase("SELECT event_id,user_wallet,proxy_wallet,timestamp_ms,event_time,condition_id,activity_type,size,usdc_size,transaction_hash,price,asset,side,outcome_index,title,slug,event_slug,outcome,raw_json,source_offset,source_index,pulled_at", q)
+	sqlText, args := buildEventQueryBase("SELECT event_id,user_wallet,proxy_wallet,timestamp_ms,event_time,condition_id,activity_type,size,usdc_size,transaction_hash,price,asset,side,outcome_index,title,slug,market_tag,event_slug,outcome,raw_json,source_offset,source_index,pulled_at", q)
 	sqlText += " ORDER BY timestamp_ms DESC, id DESC LIMIT ? OFFSET ?"
 	args = append(args, q.Limit, q.Offset)
 
@@ -249,6 +273,7 @@ func (s *MySQLStore) QueryEvents(ctx context.Context, q EventQuery) ([]ActivityE
 			&outcomeIndex,
 			&e.Title,
 			&e.Slug,
+			&e.MarketTag,
 			&e.EventSlug,
 			&e.Outcome,
 			&e.RawJSON,
@@ -290,8 +315,8 @@ func (s *MySQLStore) QuerySlugSummaries(ctx context.Context, q SlugSummaryQuery)
 		q.Offset = 0
 	}
 
-	whereSQL, args := buildSlugWhere(q.Keyword)
-	countSQL := "SELECT COUNT(1) FROM (SELECT slug FROM pm_activity_events" + whereSQL + " GROUP BY slug) t"
+	whereSQL, args := buildSlugWhere(q.Keyword, q.Tag)
+	countSQL := "SELECT COUNT(1) FROM (SELECT market_tag, slug FROM pm_activity_events" + whereSQL + " GROUP BY market_tag, slug) t"
 	var total int64
 	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count slugs failed: %w", err)
@@ -300,7 +325,7 @@ func (s *MySQLStore) QuerySlugSummaries(ctx context.Context, q SlugSummaryQuery)
 		return []SlugSummary{}, 0, nil
 	}
 
-	listSQL := "SELECT slug, " +
+	listSQL := "SELECT market_tag, slug, " +
 		"COUNT(1) AS event_count, " +
 		"COALESCE(MIN(timestamp_ms), 0) AS first_ts, " +
 		"COALESCE(MAX(timestamp_ms), 0) AS last_ts, " +
@@ -308,7 +333,7 @@ func (s *MySQLStore) QuerySlugSummaries(ctx context.Context, q SlugSummaryQuery)
 		"SUM(CASE WHEN side = 'sell' THEN 1 ELSE 0 END) AS sell_count, " +
 		"SUM(CASE WHEN (LOWER(outcome) LIKE '%up%' OR LOWER(outcome) = 'yes' OR LOWER(outcome) LIKE '%long%' OR LOWER(outcome) LIKE '%higher%') THEN 1 ELSE 0 END) AS up_count, " +
 		"SUM(CASE WHEN (LOWER(outcome) LIKE '%down%' OR LOWER(outcome) = 'no' OR LOWER(outcome) LIKE '%short%' OR LOWER(outcome) LIKE '%lower%') THEN 1 ELSE 0 END) AS down_count " +
-		"FROM pm_activity_events" + whereSQL + " GROUP BY slug ORDER BY last_ts DESC LIMIT ? OFFSET ?"
+		"FROM pm_activity_events" + whereSQL + " GROUP BY market_tag, slug ORDER BY CASE market_tag WHEN 'btc' THEN 1 WHEN 'eth' THEN 2 WHEN 'sol' THEN 3 ELSE 9 END, last_ts DESC LIMIT ? OFFSET ?"
 
 	listArgs := make([]interface{}, 0, len(args)+2)
 	listArgs = append(listArgs, args...)
@@ -324,6 +349,7 @@ func (s *MySQLStore) QuerySlugSummaries(ctx context.Context, q SlugSummaryQuery)
 	for rows.Next() {
 		var row SlugSummary
 		if err = rows.Scan(
+			&row.MarketTag,
 			&row.Slug,
 			&row.EventCount,
 			&row.FirstTimestampMs,
@@ -358,15 +384,15 @@ func (s *MySQLStore) QueryEventsByStrategyGroup(ctx context.Context, q StrategyG
 		q.Limit = 10000
 	}
 
-	querySQL := "SELECT event_id,user_wallet,proxy_wallet,timestamp_ms,event_time,condition_id,activity_type,size,usdc_size,transaction_hash,price,asset,side,outcome_index,title,slug,event_slug,outcome,raw_json,source_offset,source_index,pulled_at " +
+	querySQL := "SELECT event_id,user_wallet,proxy_wallet,timestamp_ms,event_time,condition_id,activity_type,size,usdc_size,transaction_hash,price,asset,side,outcome_index,title,slug,market_tag,event_slug,outcome,raw_json,source_offset,source_index,pulled_at " +
 		"FROM pm_activity_events WHERE slug <> '' " +
-		"AND LOWER(SUBSTRING_INDEX(slug, '-', 1)) = ? " +
+		"AND market_tag = ? " +
 		"AND (slug LIKE '%-5m-%' OR slug LIKE '%-15m-%') " +
 		"AND CAST(SUBSTRING_INDEX(slug, '-', -1) AS UNSIGNED) > ? " +
 		"AND CAST(SUBSTRING_INDEX(slug, '-', -1) AS UNSIGNED) <= ? " +
 		"ORDER BY timestamp_ms DESC, id DESC LIMIT ?"
 
-	rows, err := s.db.QueryContext(ctx, querySQL, q.Symbol, q.StartSec, q.EndSec, q.Limit)
+	rows, err := s.db.QueryContext(ctx, querySQL, normalizeMarketTag(q.Symbol), q.StartSec, q.EndSec, q.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("query strategy group events failed: %w", err)
 	}
@@ -397,6 +423,7 @@ func (s *MySQLStore) QueryEventsByStrategyGroup(ctx context.Context, q StrategyG
 			&outcomeIndex,
 			&e.Title,
 			&e.Slug,
+			&e.MarketTag,
 			&e.EventSlug,
 			&e.Outcome,
 			&e.RawJSON,
@@ -440,6 +467,10 @@ func buildEventQueryBase(selectClause string, q EventQuery) (string, []interface
 		builder.WriteString(" AND slug = ?")
 		args = append(args, strings.TrimSpace(q.Slug))
 	}
+	if q.MarketTag != "" {
+		builder.WriteString(" AND market_tag = ?")
+		args = append(args, normalizeMarketTag(q.MarketTag))
+	}
 	if q.ActivityType != "" {
 		builder.WriteString(" AND activity_type = ?")
 		args = append(args, strings.ToUpper(strings.TrimSpace(q.ActivityType)))
@@ -451,10 +482,16 @@ func buildEventQueryBase(selectClause string, q EventQuery) (string, []interface
 	return builder.String(), args
 }
 
-func buildSlugWhere(keyword string) (string, []interface{}) {
+func buildSlugWhere(keyword, tag string) (string, []interface{}) {
 	builder := strings.Builder{}
 	builder.WriteString(" WHERE slug <> ''")
 	args := make([]interface{}, 0, 2)
+
+	tag = normalizeMarketTag(tag)
+	if tag != "" && tag != "all" {
+		builder.WriteString(" AND market_tag = ?")
+		args = append(args, tag)
+	}
 
 	keyword = strings.TrimSpace(keyword)
 	if keyword != "" {
@@ -485,4 +522,22 @@ func nullableInt(v *int) interface{} {
 		return nil
 	}
 	return *v
+}
+
+func normalizeMarketTag(tag string) string {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	switch tag {
+	case "btc", "bitcoin":
+		return "btc"
+	case "eth", "ethereum":
+		return "eth"
+	case "sol", "solana":
+		return "sol"
+	case "all":
+		return "all"
+	case "":
+		return ""
+	default:
+		return "other"
+	}
 }

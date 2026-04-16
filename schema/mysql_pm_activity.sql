@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS pm_activity_events (
   outcome_index INT NULL,
   title VARCHAR(1024) NOT NULL DEFAULT '',
   slug VARCHAR(255) NOT NULL DEFAULT '',
+  market_tag VARCHAR(24) NOT NULL DEFAULT '' COMMENT 'btc/eth/sol/other',
   event_slug VARCHAR(255) NOT NULL DEFAULT '',
   outcome VARCHAR(128) NOT NULL DEFAULT '',
   source_offset INT NOT NULL DEFAULT 0,
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS pm_activity_events (
   PRIMARY KEY (id),
   UNIQUE KEY uq_event_id (event_id),
   KEY idx_user_ts (user_wallet, timestamp_ms DESC),
+  KEY idx_market_tag_ts (market_tag, timestamp_ms DESC),
   KEY idx_slug_ts (slug, timestamp_ms DESC),
   KEY idx_tx_hash (transaction_hash)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

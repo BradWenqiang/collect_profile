@@ -56,7 +56,32 @@
 2. `GET /healthz`
 3. `GET /api/v1/status`：轮询状态、累计抓取、累计去重、库内总行数
 4. `POST /api/v1/sync/once`：手动触发（`mode=fast|backfill`）
-5. `GET /api/v1/events`：查询最近明细（支持 `limit/offset/slug/type/side`）
+5. `GET /api/v1/events`：查询最近明细（支持 `limit/page/slug/tag/type/side`）
+6. `GET /api/v1/slugs`：按 `slug + market_tag` 聚合分页（支持 `page/page_size/keyword/tag`）
+7. `GET /api/v1/events/strategy-group`：按策略分组窗口查询（`symbol/start_sec/end_sec`）
+
+## Market Tag
+
+采集入库时会自动打 `market_tag`：
+
+- `btc` / `eth` / `sol` / `other`
+- 表字段已带索引：`idx_market_tag_ts (market_tag, timestamp_ms DESC)`
+
+## 存量数据回刷（Python）
+
+脚本：`scripts/backfill_market_tag.py`
+
+用途：
+
+1. 自动补齐 `market_tag` 列和索引（老库兼容）
+2. 按批次重刷存量数据 tag（BTC/ETH/SOL/OTHER）
+
+示例：
+
+```bash
+python3 -m pip install pymysql
+python3 scripts/backfill_market_tag.py --host 127.0.0.1 --port 3306 --user root --password root --database pm
+```
 
 ## 运行配置（写死代码）
 

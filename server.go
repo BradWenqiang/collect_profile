@@ -95,6 +95,7 @@ func NewHTTPServer(cfg *Config, poller *Poller, store *MySQLStore) *server.Hertz
 			Limit:        limit,
 			Offset:       offset,
 			Slug:         strings.TrimSpace(c.Query("slug")),
+			MarketTag:    strings.TrimSpace(c.Query("tag")),
 			ActivityType: strings.TrimSpace(c.Query("type")),
 			Side:         strings.TrimSpace(c.Query("side")),
 		}
@@ -170,10 +171,12 @@ func NewHTTPServer(cfg *Config, poller *Poller, store *MySQLStore) *server.Hertz
 		offset := (page - 1) * pageSize
 
 		keyword := strings.TrimSpace(c.Query("keyword"))
+		tag := strings.TrimSpace(c.Query("tag"))
 		items, total, err := store.QuerySlugSummaries(ctx, SlugSummaryQuery{
 			Limit:   pageSize,
 			Offset:  offset,
 			Keyword: keyword,
+			Tag:     tag,
 		})
 		if err != nil {
 			writeErr(c, http.StatusInternalServerError, err.Error())
@@ -186,6 +189,7 @@ func NewHTTPServer(cfg *Config, poller *Poller, store *MySQLStore) *server.Hertz
 			"total":       total,
 			"total_pages": calcTotalPages(total, pageSize),
 			"keyword":     keyword,
+			"tag":         tag,
 			"items":       items,
 		})
 	})

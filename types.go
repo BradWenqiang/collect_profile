@@ -34,6 +34,7 @@ type ActivityEvent struct {
 
 	Title     string `json:"title"`
 	Slug      string `json:"slug"`
+	MarketTag string `json:"market_tag"`
 	EventSlug string `json:"event_slug"`
 	Outcome   string `json:"outcome"`
 
@@ -71,6 +72,7 @@ func parseActivityEvent(raw RawActivity, userWallet string, sourceOffset, source
 		OutcomeIndex:    outcomeIndex,
 		Title:           strings.TrimSpace(extractString(raw["title"])),
 		Slug:            strings.TrimSpace(extractString(raw["slug"])),
+		MarketTag:       deriveMarketTag(strings.TrimSpace(extractString(raw["slug"])), strings.TrimSpace(extractString(raw["title"])), strings.TrimSpace(extractString(raw["outcome"]))),
 		EventSlug:       strings.TrimSpace(extractString(raw["eventSlug"])),
 		Outcome:         strings.TrimSpace(extractString(raw["outcome"])),
 		RawJSON:         rawJSON,
@@ -93,6 +95,23 @@ func normalizeUnixTimestampMs(ts int64) int64 {
 		return ts * 1000
 	}
 	return ts
+}
+
+func deriveMarketTag(slug, title, outcome string) string {
+	text := strings.ToLower(strings.TrimSpace(slug + " " + title + " " + outcome))
+	if text == "" {
+		return "other"
+	}
+	if strings.Contains(text, "btc") || strings.Contains(text, "bitcoin") {
+		return "btc"
+	}
+	if strings.Contains(text, "eth") || strings.Contains(text, "ethereum") {
+		return "eth"
+	}
+	if strings.Contains(text, "sol") || strings.Contains(text, "solana") {
+		return "sol"
+	}
+	return "other"
 }
 
 func buildEventID(userWallet, canonical string) string {
