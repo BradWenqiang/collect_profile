@@ -1,12 +1,31 @@
 .DS_Store
 .idea/
 .vscode/
+*.swp
+*.swo
+*.tmp
 
 *.log
+*.out
+*.err
+*.pid
 *.sqlite
 *.sqlite3
 tmp/
+logs/
+runtime/
 dist/
 bin/
+build/
 
 .env
+.env.*
+!.env.example
+*.local
+
+/collect_profile
+coverage.out
+*.coverprofile
+*.test
+*.prof
+*.pprof
