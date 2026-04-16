@@ -104,21 +104,21 @@ def backfill(cur, table: str, batch_size: int, dry_run: bool) -> int:
     SET market_tag = CASE
       WHEN (
         LOWER(SUBSTRING_INDEX(slug, '-', 1)) IN ('btc', 'bitcoin') OR
-        LOWER(slug) LIKE '%btc%' OR LOWER(slug) LIKE '%bitcoin%' OR
-        LOWER(title) LIKE '%btc%' OR LOWER(title) LIKE '%bitcoin%' OR
-        LOWER(outcome) LIKE '%btc%' OR LOWER(outcome) LIKE '%bitcoin%'
+        LOWER(slug) LIKE '%%btc%%' OR LOWER(slug) LIKE '%%bitcoin%%' OR
+        LOWER(title) LIKE '%%btc%%' OR LOWER(title) LIKE '%%bitcoin%%' OR
+        LOWER(outcome) LIKE '%%btc%%' OR LOWER(outcome) LIKE '%%bitcoin%%'
       ) THEN 'btc'
       WHEN (
         LOWER(SUBSTRING_INDEX(slug, '-', 1)) IN ('eth', 'ethereum') OR
-        LOWER(slug) LIKE '%eth%' OR LOWER(slug) LIKE '%ethereum%' OR
-        LOWER(title) LIKE '%eth%' OR LOWER(title) LIKE '%ethereum%' OR
-        LOWER(outcome) LIKE '%eth%' OR LOWER(outcome) LIKE '%ethereum%'
+        LOWER(slug) LIKE '%%eth%%' OR LOWER(slug) LIKE '%%ethereum%%' OR
+        LOWER(title) LIKE '%%eth%%' OR LOWER(title) LIKE '%%ethereum%%' OR
+        LOWER(outcome) LIKE '%%eth%%' OR LOWER(outcome) LIKE '%%ethereum%%'
       ) THEN 'eth'
       WHEN (
         LOWER(SUBSTRING_INDEX(slug, '-', 1)) IN ('sol', 'solana') OR
-        LOWER(slug) LIKE '%sol%' OR LOWER(slug) LIKE '%solana%' OR
-        LOWER(title) LIKE '%sol%' OR LOWER(title) LIKE '%solana%' OR
-        LOWER(outcome) LIKE '%sol%' OR LOWER(outcome) LIKE '%solana%'
+        LOWER(slug) LIKE '%%sol%%' OR LOWER(slug) LIKE '%%solana%%' OR
+        LOWER(title) LIKE '%%sol%%' OR LOWER(title) LIKE '%%solana%%' OR
+        LOWER(outcome) LIKE '%%sol%%' OR LOWER(outcome) LIKE '%%solana%%'
       ) THEN 'sol'
       ELSE 'other'
     END
