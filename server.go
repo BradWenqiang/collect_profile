@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -164,14 +166,53 @@ func NewHTTPServer(cfg *Config, poller *Poller, store *MySQLStore) *server.Hertz
 		if pageSize > 100 {
 			pageSize = 100
 		}
+		keyword := strings.TrimSpace(c.Query("keyword"))
+		tag := strings.TrimSpace(c.Query("tag"))
+		mode := strings.ToLower(strings.TrimSpace(c.Query("mode")))
+
+		if mode == "cursor" {
+			cursorRaw := strings.TrimSpace(c.Query("cursor"))
+			cursorTag, cursorLastTS, cursorSlug, err := decodeSlugCursor(cursorRaw)
+			if err != nil {
+				writeErr(c, http.StatusBadRequest, "invalid cursor")
+				return
+			}
+			items, hasMore, err := store.QuerySlugSummariesByCursor(ctx, SlugSummaryQuery{
+				Limit:   pageSize,
+				Keyword: keyword,
+				Tag:     tag,
+			}, cursorTag, cursorLastTS, cursorSlug)
+			if err != nil {
+				writeErr(c, http.StatusInternalServerError, err.Error())
+				return
+			}
+
+			nextCursor := ""
+			if hasMore && len(items) > 0 {
+				last := items[len(items)-1]
+				nextCursor = encodeSlugCursor(last.MarketTag, last.LastTimestampMs, last.Slug)
+			}
+
+			writeOK(c, map[string]interface{}{
+				"mode":        "cursor",
+				"page_size":   pageSize,
+				"keyword":     keyword,
+				"tag":         tag,
+				"cursor":      cursorRaw,
+				"next_cursor": nextCursor,
+				"has_more":    hasMore,
+				"count":       len(items),
+				"items":       items,
+			})
+			return
+		}
+
 		page := parsePositiveInt(c.Query("page"), 1)
 		if page <= 0 {
 			page = 1
 		}
 		offset := (page - 1) * pageSize
 
-		keyword := strings.TrimSpace(c.Query("keyword"))
-		tag := strings.TrimSpace(c.Query("tag"))
 		items, total, err := store.QuerySlugSummaries(ctx, SlugSummaryQuery{
 			Limit:   pageSize,
 			Offset:  offset,
@@ -207,6 +248,47 @@ func parsePositiveInt(raw string, fallback int) int {
 		return fallback
 	}
 	return v
+}
+
+func encodeSlugCursor(tag string, lastTS int64, slug string) string {
+	tag = normalizeMarketTag(tag)
+	slug = strings.TrimSpace(slug)
+	if tag == "" || tag == "all" || slug == "" {
+		return ""
+	}
+	payload := tag + "\t" + strconv.FormatInt(lastTS, 10) + "\t" + slug
+	return base64.RawURLEncoding.EncodeToString([]byte(payload))
+}
+
+func decodeSlugCursor(raw string) (string, int64, string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", 0, "", nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return "", 0, "", fmt.Errorf("decode cursor failed: %w", err)
+	}
+	parts := strings.SplitN(string(decoded), "\t", 3)
+	if len(parts) != 3 {
+		return "", 0, "", fmt.Errorf("invalid cursor payload")
+	}
+
+	tag := normalizeMarketTag(parts[0])
+	if tag == "" || tag == "all" {
+		return "", 0, "", fmt.Errorf("invalid cursor tag")
+	}
+
+	lastTS, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+	if err != nil || lastTS < 0 {
+		return "", 0, "", fmt.Errorf("invalid cursor timestamp")
+	}
+
+	slug := strings.TrimSpace(parts[2])
+	if slug == "" {
+		return "", 0, "", fmt.Errorf("invalid cursor slug")
+	}
+	return tag, lastTS, slug, nil
 }
 
 func parsePositiveInt64(raw string, fallback int64) int64 {

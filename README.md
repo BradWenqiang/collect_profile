@@ -57,7 +57,9 @@
 3. `GET /api/v1/status`：轮询状态、累计抓取、累计去重、库内总行数
 4. `POST /api/v1/sync/once`：手动触发（`mode=fast|backfill`）
 5. `GET /api/v1/events`：查询最近明细（支持 `limit/page/slug/tag/type/side`）
-6. `GET /api/v1/slugs`：按 `slug + market_tag` 聚合分页（支持 `page/page_size/keyword/tag`）
+6. `GET /api/v1/slugs`：按 `slug + market_tag` 聚合分页
+   - 页码模式（兼容）：`page/page_size/keyword/tag`
+   - 游标模式（推荐，避免深分页）：`mode=cursor&page_size=...&cursor=...&keyword=...&tag=...`
 7. `GET /api/v1/events/strategy-group`：按策略分组窗口查询（`symbol/start_sec/end_sec`）
 
 ## Market Tag

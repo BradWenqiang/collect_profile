@@ -369,6 +369,77 @@ func (s *MySQLStore) QuerySlugSummaries(ctx context.Context, q SlugSummaryQuery)
 	return items, total, nil
 }
 
+func (s *MySQLStore) QuerySlugSummariesByCursor(ctx context.Context, q SlugSummaryQuery, cursorTag string, cursorLastTS int64, cursorSlug string) ([]SlugSummary, bool, error) {
+	if q.Limit <= 0 {
+		q.Limit = 12
+	}
+
+	whereSQL, args := buildSlugWhere(q.Keyword, q.Tag)
+	rankSQL := "CASE market_tag WHEN 'btc' THEN 1 WHEN 'eth' THEN 2 WHEN 'sol' THEN 3 ELSE 9 END"
+	aggSQL := "SELECT market_tag, slug, " +
+		"COUNT(1) AS event_count, " +
+		"COALESCE(MIN(timestamp_ms), 0) AS first_ts, " +
+		"COALESCE(MAX(timestamp_ms), 0) AS last_ts, " +
+		"SUM(CASE WHEN side = 'buy' THEN 1 ELSE 0 END) AS buy_count, " +
+		"SUM(CASE WHEN side = 'sell' THEN 1 ELSE 0 END) AS sell_count, " +
+		"SUM(CASE WHEN (LOWER(outcome) LIKE '%up%' OR LOWER(outcome) = 'yes' OR LOWER(outcome) LIKE '%long%' OR LOWER(outcome) LIKE '%higher%') THEN 1 ELSE 0 END) AS up_count, " +
+		"SUM(CASE WHEN (LOWER(outcome) LIKE '%down%' OR LOWER(outcome) = 'no' OR LOWER(outcome) LIKE '%short%' OR LOWER(outcome) LIKE '%lower%') THEN 1 ELSE 0 END) AS down_count " +
+		"FROM pm_activity_events" + whereSQL + " GROUP BY market_tag, slug"
+
+	sqlBuilder := strings.Builder{}
+	sqlBuilder.WriteString("SELECT market_tag, slug, event_count, first_ts, last_ts, buy_count, sell_count, up_count, down_count")
+	sqlBuilder.WriteString(" FROM (")
+	sqlBuilder.WriteString(aggSQL)
+	sqlBuilder.WriteString(") g")
+
+	queryArgs := make([]interface{}, 0, len(args)+8)
+	queryArgs = append(queryArgs, args...)
+
+	cursorTag = normalizeMarketTag(cursorTag)
+	if cursorTag != "" && strings.TrimSpace(cursorSlug) != "" {
+		rank := marketTagRank(cursorTag)
+		sqlBuilder.WriteString(" WHERE (" + rankSQL + " > ?) OR (" + rankSQL + " = ? AND (last_ts < ? OR (last_ts = ? AND slug > ?)))")
+		queryArgs = append(queryArgs, rank, rank, cursorLastTS, cursorLastTS, strings.TrimSpace(cursorSlug))
+	}
+
+	sqlBuilder.WriteString(" ORDER BY " + rankSQL + " ASC, last_ts DESC, slug ASC LIMIT ?")
+	queryArgs = append(queryArgs, q.Limit+1)
+
+	rows, err := s.db.QueryContext(ctx, sqlBuilder.String(), queryArgs...)
+	if err != nil {
+		return nil, false, fmt.Errorf("query slug summaries by cursor failed: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]SlugSummary, 0, q.Limit+1)
+	for rows.Next() {
+		var row SlugSummary
+		if err = rows.Scan(
+			&row.MarketTag,
+			&row.Slug,
+			&row.EventCount,
+			&row.FirstTimestampMs,
+			&row.LastTimestampMs,
+			&row.BuyCount,
+			&row.SellCount,
+			&row.UpCount,
+			&row.DownCount,
+		); err != nil {
+			return nil, false, fmt.Errorf("scan slug summary by cursor failed: %w", err)
+		}
+		items = append(items, row)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, false, fmt.Errorf("iterate slug summaries by cursor failed: %w", err)
+	}
+
+	hasMore := len(items) > q.Limit
+	if hasMore {
+		items = items[:q.Limit]
+	}
+	return items, hasMore, nil
+}
+
 func (s *MySQLStore) QueryEventsByStrategyGroup(ctx context.Context, q StrategyGroupQuery) ([]ActivityEvent, error) {
 	q.Symbol = strings.ToLower(strings.TrimSpace(q.Symbol))
 	if q.Symbol == "" {
@@ -539,5 +610,18 @@ func normalizeMarketTag(tag string) string {
 		return ""
 	default:
 		return "other"
+	}
+}
+
+func marketTagRank(tag string) int {
+	switch normalizeMarketTag(tag) {
+	case "btc":
+		return 1
+	case "eth":
+		return 2
+	case "sol":
+		return 3
+	default:
+		return 9
 	}
 }

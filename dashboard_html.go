@@ -844,6 +844,12 @@ const dashboardHTML = `<!doctype html>
         slugPageSize: 12,
         slugKeyword: "",
         slugTag: "all",
+        slugMode: "cursor",
+        slugCursor: "",
+        slugNextCursor: "",
+        slugHasMore: false,
+        slugCursorStack: [""],
+        slugFilterKey: "",
         selectedSlug: "",
         selectedStrategy: null,
         eventPage: 1,
@@ -1368,6 +1374,18 @@ const dashboardHTML = `<!doctype html>
         state.slugTag = String(document.getElementById("slug-tag").value || "all").trim().toLowerCase();
       }
 
+      function buildSlugFilterKey() {
+        return [String(state.slugPageSize || 12), state.slugKeyword || "", state.slugTag || "all"].join("|");
+      }
+
+      function resetSlugCursorPaging() {
+        state.slugPage = 1;
+        state.slugCursor = "";
+        state.slugNextCursor = "";
+        state.slugHasMore = false;
+        state.slugCursorStack = [""];
+      }
+
       function renderSlugRows(items) {
         var tbody = document.getElementById("slug-rows");
         if (!items || !items.length) {
@@ -1409,6 +1427,21 @@ const dashboardHTML = `<!doctype html>
       }
 
       function renderSlugPager(data) {
+        var mode = String((data && data.mode) || "").trim().toLowerCase();
+        if (mode === "cursor") {
+          var cPage = Number(state.slugPage || 1);
+          var cCount = Number(data && data.count);
+          if (!Number.isFinite(cCount) || cCount < 0) {
+            cCount = Array.isArray(data && data.items) ? data.items.length : 0;
+          }
+          var cHasMore = !!(data && data.has_more);
+          if (!Number.isFinite(cPage) || cPage <= 0) cPage = 1;
+          document.getElementById("slug-page-meta").textContent = "第 " + cPage + " 页（游标分页），本页 " + cCount + " 场" + (cHasMore ? "，可继续下一页" : "，已到末页");
+          document.getElementById("btn-slug-prev").disabled = cPage <= 1;
+          document.getElementById("btn-slug-next").disabled = !cHasMore;
+          return;
+        }
+
         var page = Number(data.page || 1);
         var total = Number(data.total || 0);
         var pages = Number(data.total_pages || 0);
@@ -1423,19 +1456,68 @@ const dashboardHTML = `<!doctype html>
         document.getElementById("btn-slug-next").disabled = pages <= 0 || page >= pages;
       }
 
-      async function loadSlugs(page) {
+      async function loadSlugs(action) {
         readSlugFilters();
-        var targetPage = clamp(toInt(page, state.slugPage || 1), 1, 999999);
+        var nextAction = String(action || "refresh").trim().toLowerCase();
+        var filterKey = buildSlugFilterKey();
+
+        if (!state.slugFilterKey || state.slugFilterKey !== filterKey || nextAction === "reset") {
+          state.slugFilterKey = filterKey;
+          resetSlugCursorPaging();
+          nextAction = "refresh";
+        }
+
+        var targetPage = state.slugPage || 1;
+        var cursor = state.slugCursor || "";
+        if (nextAction === "next") {
+          if (!state.slugHasMore || !state.slugNextCursor) {
+            renderSlugPager({ mode: "cursor", count: 0, has_more: false, items: [] });
+            return;
+          }
+          targetPage += 1;
+          cursor = state.slugNextCursor;
+        } else if (nextAction === "prev") {
+          if (targetPage <= 1) {
+            targetPage = 1;
+            cursor = "";
+          } else {
+            targetPage -= 1;
+            cursor = state.slugCursorStack[targetPage - 1] || "";
+          }
+        } else {
+          cursor = state.slugCursorStack[targetPage - 1] || state.slugCursor || "";
+        }
+
         var params = new URLSearchParams();
-        params.set("page", String(targetPage));
+        params.set("mode", "cursor");
         params.set("page_size", String(state.slugPageSize));
+        if (cursor) params.set("cursor", cursor);
         if (state.slugKeyword) params.set("keyword", state.slugKeyword);
         if (state.slugTag && state.slugTag !== "all") params.set("tag", state.slugTag);
 
         try {
           var data = await request("/api/v1/slugs?" + params.toString());
-          renderSlugRows(data.items || []);
-          renderSlugPager(data);
+          var items = Array.isArray(data.items) ? data.items : [];
+          state.slugMode = "cursor";
+          state.slugPage = targetPage;
+          state.slugCursor = cursor;
+          state.slugNextCursor = String(data.next_cursor || "").trim();
+          state.slugHasMore = !!data.has_more;
+          if (!Array.isArray(state.slugCursorStack) || !state.slugCursorStack.length) {
+            state.slugCursorStack = [""];
+          }
+          state.slugCursorStack[targetPage - 1] = cursor;
+          state.slugCursorStack = state.slugCursorStack.slice(0, targetPage);
+          if (state.slugHasMore && state.slugNextCursor) {
+            state.slugCursorStack[targetPage] = state.slugNextCursor;
+          }
+          renderSlugRows(items);
+          renderSlugPager({
+            mode: "cursor",
+            count: Number(data.count || items.length),
+            has_more: state.slugHasMore,
+            items: items
+          });
         } catch (err) {
           showNotice("slug 查询失败: " + err.message, true);
         }
@@ -1632,7 +1714,7 @@ const dashboardHTML = `<!doctype html>
         document.getElementById("q-slug").value = slug;
         await loadSlugDetail(slug, marketTag);
         await loadEvents(1);
-        await loadSlugs(state.slugPage);
+        await loadSlugs("refresh");
       }
 
       function readEventFilters() {
@@ -1726,7 +1808,7 @@ const dashboardHTML = `<!doctype html>
         if (autoRefreshBox.checked) {
           timer = setInterval(function () {
             loadStatus();
-            loadSlugs(state.slugPage || 1);
+            loadSlugs("refresh");
           }, 10000);
         }
       }
@@ -1743,22 +1825,22 @@ const dashboardHTML = `<!doctype html>
       autoRefreshBox.addEventListener("change", resetAutoRefresh);
 
       document.getElementById("btn-slug-search").addEventListener("click", function () {
-        loadSlugs(1);
+        loadSlugs("reset");
       });
       document.getElementById("btn-slug-prev").addEventListener("click", function () {
-        loadSlugs(Math.max(1, (state.slugPage || 1) - 1));
+        loadSlugs("prev");
       });
       document.getElementById("btn-slug-next").addEventListener("click", function () {
-        loadSlugs((state.slugPage || 1) + 1);
+        loadSlugs("next");
       });
       document.getElementById("slug-keyword").addEventListener("keydown", function (ev) {
         if (ev.key === "Enter") {
           ev.preventDefault();
-          loadSlugs(1);
+          loadSlugs("reset");
         }
       });
       document.getElementById("slug-tag").addEventListener("change", function () {
-        loadSlugs(1);
+        loadSlugs("reset");
       });
 
       document.getElementById("slug-rows").addEventListener("click", function (ev) {
@@ -1798,7 +1880,7 @@ const dashboardHTML = `<!doctype html>
       });
 
       loadStatus();
-      loadSlugs(1);
+      loadSlugs("reset");
       loadEvents(1);
       resetAutoRefresh();
     })();
